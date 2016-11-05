@@ -99,6 +99,8 @@ MAYBE there are no hitting/premium points for the damage on the enemy robot (may
 
 MAYBE the API signal if a Robot hit the wall or another robot with a specific message
 
+TODO use 0 for north direction
+
 ** Robot Parameter Customizations
 
 Robots can be created using different parameters, like speed, acceleration, bullet damage.
