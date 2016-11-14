@@ -594,14 +594,16 @@ model_processEvent m1 be =
         initActiveScan scan =
             let
 
+                piD2 = pi / 2.0
+
                 centerX : Float
                 centerX = scan.robot.posX
 
                 centerY : Float
                 centerY = scan.robot.posY
 
-                directionRad = normalizeRad (degrees scan.direction)
-                semiapertureRad = Basics.min pi (normalizeRad (degrees scan.semiaperture))
+                directionRad = (normalizeRad (degrees scan.direction))
+                semiapertureRad = (Basics.min pi (normalizeRad (degrees scan.semiaperture)))
 
                 (hasRecognizedSomething, distance, targetX, targetY)
                      = case scan.hitRobot of
@@ -621,16 +623,24 @@ model_processEvent m1 be =
                 (endX, endY) = (polarToCartesian centerX centerY distance endAngleRad)
                 (directionX, directionY) = (polarToCartesian centerX centerY distance directionRad)
 
-                largeArcFlag = if (semiapertureRad > (pi / 2.0)) then "1" else "0"
+                largeArcFlag = if (semiapertureRad > piD2) then "1" else "0"
 
                 isLimitCase = distance <= 0.1
 
-                radarPath = Svg.Attributes.d
+                radarPath = if abs (semiapertureRad - pi) > 0.02
+                            then Svg.Attributes.d
                                   ("M " ++ toString centerX  ++ " " ++ toString centerY
                                    ++ " L " ++ toString startX ++ " " ++ toString startY
                                    ++ " A " ++ toString distance ++ " " ++ toString distance ++ " 0 " ++ largeArcFlag ++ " 1 " ++ toString endX ++ " " ++ toString endY
                                    ++ " L " ++ toString centerX ++ " " ++ toString centerY
                                    ++ " Z")
+                            else Svg.Attributes.d
+                                  ("M " ++ toString centerX  ++ " " ++ toString centerY
+                                   ++ " m -" ++ toString distance ++ " 0"
+                                   ++ " a " ++ toString distance ++ " " ++ toString distance ++ " 0 1 1 " ++ (toString (distance * 2.0)) ++ " 0"
+                                   ++ " a " ++ toString distance ++ " " ++ toString distance ++ " 0 1 1 -" ++ (toString (distance * 2.0)) ++ " 0"
+                                  )
+                                  -- NOTE: SVG can not draw an arc that is "near" a circle, so simulate a circle with this trick.
 
                 targetLineColor = if hasRecognizedSomething then "red" else "blue"
                 radarDebugLine

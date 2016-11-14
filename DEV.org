@@ -52,38 +52,22 @@ TODO remove not used code for the old Boand JS based
 
 *** TODO Various Improvements
 
-TODO the scan sometime is not displayed
-
-MAYBE clip explosions, missiles and so on inside the board
-
-TODO points lost on collision seems excessive
-
-MAYBE dead robots must remain in the leggend with their points and the time they lived
-
 TODO the home-page should include:
 TODO reference to the project home-page
 TODO REST-API documentation automatically generated
 DONE link to the board
+
+TODO send also complete stats about missing turns of the ROBOTS
 
 DONE initial screen:
 - JS ask for buffering
 - JS show a SVG animation with the waiting of new data
 - JS start displaying the board
 
-TODO use a ticket that is an integer multiple of the turn
-
-MAYBE when scan aperture is 180 nothing is displayed
-
-TODO send also complete stats about missing turns of the ROBOTS
-
 TODO sniper continue firing after the first stop
 TODO cannonReloadingTime is
 How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
 but it does not seem respected!
-
-TODO create an initial home-page for the project, the REST-API and so on
-TODO include stats with boardinfo about robots missing commands, and so on
-TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
 
 TODO improve the streaming process:
 - TODO before init tell that the board is loading 
@@ -91,6 +75,18 @@ TODO improve the streaming process:
 - TODO show at the center of the board the streaming message, and the remaining time
 
 TODO manage the correct real-time time-frame
+
+TODO create an initial home-page for the project, the REST-API and so on
+TODO include stats with boardinfo about robots missing commands, and so on
+TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
+
+MAYBE clip explosions, missiles and so on inside the board
+
+TODO points lost on collision seems excessive
+
+MAYBE dead robots must remain in the leggend with their points and the time they lived
+
+TODO use a ticket that is an integer multiple of the turn
 
 TODO add keyed elements/nodes, for board parts that are subject to frequent add and remove of node
 TODO add lazy nodes (if they speedup performances), in particular standard symbols definitions and so on

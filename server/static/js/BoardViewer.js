@@ -10466,8 +10466,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 885, column: 13},
-					end: {line: 887, column: 63}
+					start: {line: 895, column: 13},
+					end: {line: 897, column: 63}
 				},
 				_p14)('contract not respected');
 		}
@@ -10519,8 +10519,8 @@ var _user$project$BoardViewer$viewContent = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 818, column: 13},
-					end: {line: 820, column: 64}
+					start: {line: 828, column: 13},
+					end: {line: 830, column: 64}
 				},
 				_p16)('contract not respected');
 		}
@@ -10830,7 +10830,6 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				_elm_lang$core$Basics$pi,
 				_user$project$BoardViewer$normalizeRad(
 					_elm_lang$core$Basics$degrees(scan.semiaperture)));
-			var largeArcFlag = (_elm_lang$core$Native_Utils.cmp(semiapertureRad, _elm_lang$core$Basics$pi / 2.0) > 0) ? '1' : '0';
 			var directionRad = _user$project$BoardViewer$normalizeRad(
 				_elm_lang$core$Basics$degrees(scan.direction));
 			var _p22 = {
@@ -10878,7 +10877,50 @@ var _user$project$BoardViewer$model_processEvent = F2(
 			var _p28 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, directionRad);
 			var directionX = _p28._0;
 			var directionY = _p28._1;
-			var radarPath = _elm_lang$svg$Svg_Attributes$d(
+			var radarDebugLine = A2(
+				_elm_lang$svg$Svg$g,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$svg$Svg$line,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$svg$Svg_Attributes$x1(
+								_elm_lang$core$Basics$toString(centerX)),
+								_elm_lang$svg$Svg_Attributes$y1(
+								_elm_lang$core$Basics$toString(centerY)),
+								_elm_lang$svg$Svg_Attributes$x2(
+								_elm_lang$core$Basics$toString(targetX)),
+								_elm_lang$svg$Svg_Attributes$y2(
+								_elm_lang$core$Basics$toString(targetY)),
+								_elm_lang$svg$Svg_Attributes$stroke(targetLineColor)
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+						A2(
+						_elm_lang$svg$Svg$line,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$svg$Svg_Attributes$x1(
+								_elm_lang$core$Basics$toString(centerX)),
+								_elm_lang$svg$Svg_Attributes$y1(
+								_elm_lang$core$Basics$toString(centerY)),
+								_elm_lang$svg$Svg_Attributes$x2(
+								_elm_lang$core$Basics$toString(directionX)),
+								_elm_lang$svg$Svg_Attributes$y2(
+								_elm_lang$core$Basics$toString(directionY)),
+								_elm_lang$svg$Svg_Attributes$stroke('blue')
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[]))
+					]));
+			var piD2 = _elm_lang$core$Basics$pi / 2.0;
+			var largeArcFlag = (_elm_lang$core$Native_Utils.cmp(semiapertureRad, piD2) > 0) ? '1' : '0';
+			var radarPath = (_elm_lang$core$Native_Utils.cmp(
+				_elm_lang$core$Basics$abs(semiapertureRad - _elm_lang$core$Basics$pi),
+				2.0e-2) > 0) ? _elm_lang$svg$Svg_Attributes$d(
 				A2(
 					_elm_lang$core$Basics_ops['++'],
 					'M ',
@@ -10945,46 +10987,68 @@ var _user$project$BoardViewer$model_processEvent = F2(
 																									A2(
 																										_elm_lang$core$Basics_ops['++'],
 																										_elm_lang$core$Basics$toString(centerY),
-																										' Z')))))))))))))))))))))));
-			var radarDebugLine = A2(
-				_elm_lang$svg$Svg$g,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[
+																										' Z'))))))))))))))))))))))) : _elm_lang$svg$Svg_Attributes$d(
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					'M ',
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						_elm_lang$core$Basics$toString(centerX),
 						A2(
-						_elm_lang$svg$Svg$line,
-						_elm_lang$core$Native_List.fromArray(
-							[
-								_elm_lang$svg$Svg_Attributes$x1(
-								_elm_lang$core$Basics$toString(centerX)),
-								_elm_lang$svg$Svg_Attributes$y1(
-								_elm_lang$core$Basics$toString(centerY)),
-								_elm_lang$svg$Svg_Attributes$x2(
-								_elm_lang$core$Basics$toString(targetX)),
-								_elm_lang$svg$Svg_Attributes$y2(
-								_elm_lang$core$Basics$toString(targetY)),
-								_elm_lang$svg$Svg_Attributes$stroke(targetLineColor)
-							]),
-						_elm_lang$core$Native_List.fromArray(
-							[])),
-						A2(
-						_elm_lang$svg$Svg$line,
-						_elm_lang$core$Native_List.fromArray(
-							[
-								_elm_lang$svg$Svg_Attributes$x1(
-								_elm_lang$core$Basics$toString(centerX)),
-								_elm_lang$svg$Svg_Attributes$y1(
-								_elm_lang$core$Basics$toString(centerY)),
-								_elm_lang$svg$Svg_Attributes$x2(
-								_elm_lang$core$Basics$toString(directionX)),
-								_elm_lang$svg$Svg_Attributes$y2(
-								_elm_lang$core$Basics$toString(directionY)),
-								_elm_lang$svg$Svg_Attributes$stroke('blue')
-							]),
-						_elm_lang$core$Native_List.fromArray(
-							[]))
-					]));
+							_elm_lang$core$Basics_ops['++'],
+							' ',
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								_elm_lang$core$Basics$toString(centerY),
+								A2(
+									_elm_lang$core$Basics_ops['++'],
+									' m -',
+									A2(
+										_elm_lang$core$Basics_ops['++'],
+										_elm_lang$core$Basics$toString(distance),
+										A2(
+											_elm_lang$core$Basics_ops['++'],
+											' 0',
+											A2(
+												_elm_lang$core$Basics_ops['++'],
+												' a ',
+												A2(
+													_elm_lang$core$Basics_ops['++'],
+													_elm_lang$core$Basics$toString(distance),
+													A2(
+														_elm_lang$core$Basics_ops['++'],
+														' ',
+														A2(
+															_elm_lang$core$Basics_ops['++'],
+															_elm_lang$core$Basics$toString(distance),
+															A2(
+																_elm_lang$core$Basics_ops['++'],
+																' 0 1 1 ',
+																A2(
+																	_elm_lang$core$Basics_ops['++'],
+																	_elm_lang$core$Basics$toString(distance * 2.0),
+																	A2(
+																		_elm_lang$core$Basics_ops['++'],
+																		' 0',
+																		A2(
+																			_elm_lang$core$Basics_ops['++'],
+																			' a ',
+																			A2(
+																				_elm_lang$core$Basics_ops['++'],
+																				_elm_lang$core$Basics$toString(distance),
+																				A2(
+																					_elm_lang$core$Basics_ops['++'],
+																					' ',
+																					A2(
+																						_elm_lang$core$Basics_ops['++'],
+																						_elm_lang$core$Basics$toString(distance),
+																						A2(
+																							_elm_lang$core$Basics_ops['++'],
+																							' 0 1 1 -',
+																							A2(
+																								_elm_lang$core$Basics_ops['++'],
+																								_elm_lang$core$Basics$toString(distance * 2.0),
+																								' 0')))))))))))))))))))));
 			return {
 				hitRobot: hasRecognizedSomething,
 				radarPath: isLimitCase ? _elm_lang$svg$Svg_Attributes$d('') : radarPath,
@@ -11446,8 +11510,8 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1183, column: 5},
-					end: {line: 1191, column: 76}
+					start: {line: 1193, column: 5},
+					end: {line: 1201, column: 76}
 				},
 				_p59)(
 				A2(
