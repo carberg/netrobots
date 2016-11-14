@@ -895,7 +895,7 @@ viewBoard model =
         boardMaxY = boardInfo.maxBoardY
 
         drawBoardPerimeter =
-          rect [width (toPx boardMaxX), height (toPx boardMaxY), stroke "red", fill "white", strokeWidth "1px"] []
+            rect [width (toPx boardMaxX), height (toPx boardMaxY), stroke "Black", fill "GhostWhite", strokeWidth "1px"] []
 
         drawActiveEvents = List.foldl (\e l -> drawActiveEvent l e) [] model.activeEvents
 
@@ -985,7 +985,7 @@ viewBoard model =
               , scan.radarDebugLine
               ]
 
-    in  (Svg.defs [] ((colorGradientDefs model.usedRobotColors) ++ [tankSymbolDef, missileSymbolDef, drawBoardPerimeter])) :: drawActiveEvents 
+    in  (Svg.defs [] ((colorGradientDefs model.usedRobotColors) ++ [tankSymbolDef, missileSymbolDef])) :: drawBoardPerimeter :: drawActiveEvents 
 
 colorGradientDefs : Dict.Dict String String -> List (Svg Msg)
 colorGradientDefs colorToId =

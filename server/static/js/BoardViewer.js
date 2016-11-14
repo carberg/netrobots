@@ -10466,8 +10466,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 886, column: 13},
-					end: {line: 888, column: 63}
+					start: {line: 885, column: 13},
+					end: {line: 887, column: 63}
 				},
 				_p14)('contract not respected');
 		}
@@ -10482,8 +10482,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 				toPx(boardMaxX)),
 				_elm_lang$svg$Svg_Attributes$height(
 				toPx(boardMaxY)),
-				_elm_lang$svg$Svg_Attributes$stroke('red'),
-				_elm_lang$svg$Svg_Attributes$fill('white'),
+				_elm_lang$svg$Svg_Attributes$stroke('Black'),
+				_elm_lang$svg$Svg_Attributes$fill('GhostWhite'),
 				_elm_lang$svg$Svg_Attributes$strokeWidth('1px')
 			]),
 		_elm_lang$core$Native_List.fromArray(
@@ -10498,8 +10498,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 				_elm_lang$core$Basics_ops['++'],
 				_user$project$BoardViewer$colorGradientDefs(model.usedRobotColors),
 				_elm_lang$core$Native_List.fromArray(
-					[_user$project$BoardViewer$tankSymbolDef, _user$project$BoardViewer$missileSymbolDef, drawBoardPerimeter]))),
-		drawActiveEvents);
+					[_user$project$BoardViewer$tankSymbolDef, _user$project$BoardViewer$missileSymbolDef]))),
+		A2(_elm_lang$core$List_ops['::'], drawBoardPerimeter, drawActiveEvents));
 };
 var _user$project$BoardViewer$viewContent = function (model) {
 	var containerCssStyle = _elm_lang$html$Html_Attributes$style(
@@ -10519,8 +10519,8 @@ var _user$project$BoardViewer$viewContent = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 819, column: 13},
-					end: {line: 821, column: 64}
+					start: {line: 818, column: 13},
+					end: {line: 820, column: 64}
 				},
 				_p16)('contract not respected');
 		}
@@ -11446,8 +11446,8 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1184, column: 5},
-					end: {line: 1192, column: 76}
+					start: {line: 1183, column: 5},
+					end: {line: 1191, column: 76}
 				},
 				_p59)(
 				A2(
