@@ -282,49 +282,123 @@ var _elm_lang$core$Native_Utils = function() {
 
 // COMPARISONS
 
-function eq(rootX, rootY)
+function eq(x, y)
 {
-	var stack = [{ x: rootX, y: rootY }];
-	while (stack.length > 0)
+	var stack = [];
+	var isEqual = eqHelp(x, y, 0, stack);
+	var pair;
+	while (isEqual && (pair = stack.pop()))
 	{
-		var front = stack.pop();
-		var x = front.x;
-		var y = front.y;
-		if (x === y)
+		isEqual = eqHelp(pair.x, pair.y, 0, stack);
+	}
+	return isEqual;
+}
+
+
+function eqHelp(x, y, depth, stack)
+{
+	if (depth > 100)
+	{
+		stack.push({ x: x, y: y });
+		return true;
+	}
+
+	if (x === y)
+	{
+		return true;
+	}
+
+	if (typeof x !== 'object')
+	{
+		if (typeof x === 'function')
 		{
-			continue;
+			throw new Error(
+				'Trying to use `(==)` on functions. There is no way to know if functions are "the same" in the Elm sense.'
+				+ ' Read more about this at http://package.elm-lang.org/packages/elm-lang/core/latest/Basics#=='
+				+ ' which describes why it is this way and what the better version will look like.'
+			);
 		}
-		if (typeof x === 'object')
+		return false;
+	}
+
+	if (x === null || y === null)
+	{
+		return false
+	}
+
+	if (x instanceof Date)
+	{
+		return x.getTime() === y.getTime();
+	}
+
+	if (!('ctor' in x))
+	{
+		for (var key in x)
 		{
-			var c = 0;
-			for (var key in x)
-			{
-				++c;
-				if (!(key in y))
-				{
-					return false;
-				}
-				if (key === 'ctor')
-				{
-					continue;
-				}
-				stack.push({ x: x[key], y: y[key] });
-			}
-			if ('ctor' in x)
-			{
-				stack.push({ x: x.ctor, y: y.ctor});
-			}
-			if (c !== Object.keys(y).length)
+			if (!eqHelp(x[key], y[key], depth + 1, stack))
 			{
 				return false;
 			}
 		}
-		else if (typeof x === 'function')
+		return true;
+	}
+
+	// convert Dicts and Sets to lists
+	if (x.ctor === 'RBNode_elm_builtin' || x.ctor === 'RBEmpty_elm_builtin')
+	{
+		x = _elm_lang$core$Dict$toList(x);
+		y = _elm_lang$core$Dict$toList(y);
+	}
+	if (x.ctor === 'Set_elm_builtin')
+	{
+		x = _elm_lang$core$Set$toList(x);
+		y = _elm_lang$core$Set$toList(y);
+	}
+
+	// check if lists are equal without recursion
+	if (x.ctor === '::')
+	{
+		var a = x;
+		var b = y;
+		while (a.ctor === '::' && b.ctor === '::')
 		{
-			throw new Error('Equality error: general function equality is ' +
-							'undecidable, and therefore, unsupported');
+			if (!eqHelp(a._0, b._0, depth + 1, stack))
+			{
+				return false;
+			}
+			a = a._1;
+			b = b._1;
 		}
-		else
+		return a.ctor === b.ctor;
+	}
+
+	// check if Arrays are equal
+	if (x.ctor === '_Array')
+	{
+		var xs = _elm_lang$core$Native_Array.toJSArray(x);
+		var ys = _elm_lang$core$Native_Array.toJSArray(y);
+		if (xs.length !== ys.length)
+		{
+			return false;
+		}
+		for (var i = 0; i < xs.length; i++)
+		{
+			if (!eqHelp(xs[i], ys[i], depth + 1, stack))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	if (!eqHelp(x.ctor, y.ctor, depth + 1, stack))
+	{
+		return false;
+	}
+
+	for (var key in x)
+	{
+		if (!eqHelp(x[key], y[key], depth + 1, stack))
 		{
 			return false;
 		}
@@ -339,34 +413,23 @@ var LT = -1, EQ = 0, GT = 1;
 
 function cmp(x, y)
 {
-	var ord;
 	if (typeof x !== 'object')
 	{
 		return x === y ? EQ : x < y ? LT : GT;
 	}
-	else if (x instanceof String)
+
+	if (x instanceof String)
 	{
 		var a = x.valueOf();
 		var b = y.valueOf();
-		return a === b
-			? EQ
-			: a < b
-				? LT
-				: GT;
+		return a === b ? EQ : a < b ? LT : GT;
 	}
-	else if (x.ctor === '::' || x.ctor === '[]')
+
+	if (x.ctor === '::' || x.ctor === '[]')
 	{
-		while (true)
+		while (x.ctor === '::' && y.ctor === '::')
 		{
-			if (x.ctor === '[]' && y.ctor === '[]')
-			{
-				return EQ;
-			}
-			if (x.ctor !== y.ctor)
-			{
-				return x.ctor === '[]' ? LT : GT;
-			}
-			ord = cmp(x._0, y._0);
+			var ord = cmp(x._0, y._0);
 			if (ord !== EQ)
 			{
 				return ord;
@@ -374,9 +437,12 @@ function cmp(x, y)
 			x = x._1;
 			y = y._1;
 		}
+		return x.ctor === y.ctor ? EQ : x.ctor === '[]' ? LT : GT;
 	}
-	else if (x.ctor.slice(0, 6) === '_Tuple')
+
+	if (x.ctor.slice(0, 6) === '_Tuple')
 	{
+		var ord;
 		var n = x.ctor.slice(6) - 0;
 		var err = 'cannot compare tuples with more than 6 elements.';
 		if (n === 0) return EQ;
@@ -389,12 +455,12 @@ function cmp(x, y)
 		if (n >= 7) throw new Error('Comparison error: ' + err); } } } } } }
 		return EQ;
 	}
-	else
-	{
-		throw new Error('Comparison error: comparison is only defined on ints, ' +
-						'floats, times, chars, strings, lists of comparable values, ' +
-						'and tuples of comparable values.');
-	}
+
+	throw new Error(
+		'Comparison error: comparison is only defined on ints, '
+		+ 'floats, times, chars, strings, lists of comparable values, '
+		+ 'and tuples of comparable values.'
+	);
 }
 
 
@@ -607,24 +673,14 @@ function toString(v)
 			return '[]';
 		}
 
-		if (v.ctor === 'RBNode_elm_builtin' || v.ctor === 'RBEmpty_elm_builtin' || v.ctor === 'Set_elm_builtin')
+		if (v.ctor === 'Set_elm_builtin')
 		{
-			var name, list;
-			if (v.ctor === 'Set_elm_builtin')
-			{
-				name = 'Set';
-				list = A2(
-					_elm_lang$core$List$map,
-					function(x) {return x._0; },
-					_elm_lang$core$Dict$toList(v._0)
-				);
-			}
-			else
-			{
-				name = 'Dict';
-				list = _elm_lang$core$Dict$toList(v);
-			}
-			return name + '.fromList ' + toString(list);
+			return 'Set.fromList ' + toString(_elm_lang$core$Set$toList(v));
+		}
+
+		if (v.ctor === 'RBNode_elm_builtin' || v.ctor === 'RBEmpty_elm_builtin')
+		{
+			return 'Dict.fromList ' + toString(_elm_lang$core$Dict$toList(v));
 		}
 
 		var output = '';
@@ -641,6 +697,16 @@ function toString(v)
 
 	if (type === 'object')
 	{
+		if (v instanceof Date)
+		{
+			return '<' + v.toString() + '>';
+		}
+
+		if (v.elm_web_socket)
+		{
+			return '<websocket>';
+		}
+
 		var output = [];
 		for (var k in v)
 		{
@@ -1452,22 +1518,124 @@ var _elm_lang$core$List$intersperse = F2(
 			return A2(_elm_lang$core$List_ops['::'], _p21._0, spersed);
 		}
 	});
-var _elm_lang$core$List$take = F2(
+var _elm_lang$core$List$takeReverse = F3(
+	function (n, list, taken) {
+		takeReverse:
+		while (true) {
+			if (_elm_lang$core$Native_Utils.cmp(n, 0) < 1) {
+				return taken;
+			} else {
+				var _p22 = list;
+				if (_p22.ctor === '[]') {
+					return taken;
+				} else {
+					var _v23 = n - 1,
+						_v24 = _p22._1,
+						_v25 = A2(_elm_lang$core$List_ops['::'], _p22._0, taken);
+					n = _v23;
+					list = _v24;
+					taken = _v25;
+					continue takeReverse;
+				}
+			}
+		}
+	});
+var _elm_lang$core$List$takeTailRec = F2(
 	function (n, list) {
+		return _elm_lang$core$List$reverse(
+			A3(
+				_elm_lang$core$List$takeReverse,
+				n,
+				list,
+				_elm_lang$core$Native_List.fromArray(
+					[])));
+	});
+var _elm_lang$core$List$takeFast = F3(
+	function (ctr, n, list) {
 		if (_elm_lang$core$Native_Utils.cmp(n, 0) < 1) {
 			return _elm_lang$core$Native_List.fromArray(
 				[]);
 		} else {
-			var _p22 = list;
-			if (_p22.ctor === '[]') {
-				return list;
-			} else {
-				return A2(
-					_elm_lang$core$List_ops['::'],
-					_p22._0,
-					A2(_elm_lang$core$List$take, n - 1, _p22._1));
-			}
+			var _p23 = {ctor: '_Tuple2', _0: n, _1: list};
+			_v26_5:
+			do {
+				_v26_1:
+				do {
+					if (_p23.ctor === '_Tuple2') {
+						if (_p23._1.ctor === '[]') {
+							return list;
+						} else {
+							if (_p23._1._1.ctor === '::') {
+								switch (_p23._0) {
+									case 1:
+										break _v26_1;
+									case 2:
+										return _elm_lang$core$Native_List.fromArray(
+											[_p23._1._0, _p23._1._1._0]);
+									case 3:
+										if (_p23._1._1._1.ctor === '::') {
+											return _elm_lang$core$Native_List.fromArray(
+												[_p23._1._0, _p23._1._1._0, _p23._1._1._1._0]);
+										} else {
+											break _v26_5;
+										}
+									default:
+										if ((_p23._1._1._1.ctor === '::') && (_p23._1._1._1._1.ctor === '::')) {
+											var _p28 = _p23._1._1._1._0;
+											var _p27 = _p23._1._1._0;
+											var _p26 = _p23._1._0;
+											var _p25 = _p23._1._1._1._1._0;
+											var _p24 = _p23._1._1._1._1._1;
+											return (_elm_lang$core$Native_Utils.cmp(ctr, 1000) > 0) ? A2(
+												_elm_lang$core$List_ops['::'],
+												_p26,
+												A2(
+													_elm_lang$core$List_ops['::'],
+													_p27,
+													A2(
+														_elm_lang$core$List_ops['::'],
+														_p28,
+														A2(
+															_elm_lang$core$List_ops['::'],
+															_p25,
+															A2(_elm_lang$core$List$takeTailRec, n - 4, _p24))))) : A2(
+												_elm_lang$core$List_ops['::'],
+												_p26,
+												A2(
+													_elm_lang$core$List_ops['::'],
+													_p27,
+													A2(
+														_elm_lang$core$List_ops['::'],
+														_p28,
+														A2(
+															_elm_lang$core$List_ops['::'],
+															_p25,
+															A3(_elm_lang$core$List$takeFast, ctr + 1, n - 4, _p24)))));
+										} else {
+											break _v26_5;
+										}
+								}
+							} else {
+								if (_p23._0 === 1) {
+									break _v26_1;
+								} else {
+									break _v26_5;
+								}
+							}
+						}
+					} else {
+						break _v26_5;
+					}
+				} while(false);
+				return _elm_lang$core$Native_List.fromArray(
+					[_p23._1._0]);
+			} while(false);
+			return list;
 		}
+	});
+var _elm_lang$core$List$take = F2(
+	function (n, list) {
+		return A3(_elm_lang$core$List$takeFast, 0, n, list);
 	});
 var _elm_lang$core$List$repeatHelp = F3(
 	function (result, n, value) {
@@ -1476,12 +1644,12 @@ var _elm_lang$core$List$repeatHelp = F3(
 			if (_elm_lang$core$Native_Utils.cmp(n, 0) < 1) {
 				return result;
 			} else {
-				var _v23 = A2(_elm_lang$core$List_ops['::'], value, result),
-					_v24 = n - 1,
-					_v25 = value;
-				result = _v23;
-				n = _v24;
-				value = _v25;
+				var _v27 = A2(_elm_lang$core$List_ops['::'], value, result),
+					_v28 = n - 1,
+					_v29 = value;
+				result = _v27;
+				n = _v28;
+				value = _v29;
 				continue repeatHelp;
 			}
 		}
@@ -2158,17 +2326,40 @@ var incomingPortMap = F2(function subMap(tagger, finalTagger)
 
 function setupIncomingPort(name, callback)
 {
+	var sentBeforeInit = [];
 	var subs = _elm_lang$core$Native_List.Nil;
 	var converter = effectManagers[name].converter;
+	var currentOnEffects = preInitOnEffects;
+	var currentSend = preInitSend;
 
 	// CREATE MANAGER
 
 	var init = _elm_lang$core$Native_Scheduler.succeed(null);
 
-	function onEffects(router, subList, state)
+	function preInitOnEffects(router, subList, state)
+	{
+		var postInitResult = postInitOnEffects(router, subList, state);
+
+		for(var i = 0; i < sentBeforeInit.length; i++)
+		{
+			postInitSend(sentBeforeInit[i]);
+		}
+
+		sentBeforeInit = null; // to release objects held in queue
+		currentSend = postInitSend;
+		currentOnEffects = postInitOnEffects;
+		return postInitResult;
+	}
+
+	function postInitOnEffects(router, subList, state)
 	{
 		subs = subList;
 		return init;
+	}
+
+	function onEffects(router, subList, state)
+	{
+		return currentOnEffects(router, subList, state);
 	}
 
 	effectManagers[name].init = init;
@@ -2176,9 +2367,14 @@ function setupIncomingPort(name, callback)
 
 	// PUBLIC API
 
-	function send(value)
+	function preInitSend(value)
 	{
-		var result = A2(_elm_lang$core$Json_Decode$decodeValue, converter, value);
+		sentBeforeInit.push(value);
+	}
+
+	function postInitSend(incomingValue)
+	{
+		var result = A2(_elm_lang$core$Json_Decode$decodeValue, converter, incomingValue);
 		if (result.ctor === 'Err')
 		{
 			throw new Error('Trying to send an unexpected type of value through port `' + name + '`:\n' + result._0);
@@ -2191,6 +2387,11 @@ function setupIncomingPort(name, callback)
 			callback(temp._0(value));
 			temp = temp._1;
 		}
+	}
+
+	function send(incomingValue)
+	{
+		currentSend(incomingValue);
 	}
 
 	return { send: send };
@@ -2215,6 +2416,7 @@ return {
 };
 
 }();
+
 //import Native.Utils //
 
 var _elm_lang$core$Native_Scheduler = function() {
@@ -2464,7 +2666,10 @@ function work()
 	var process;
 	while (numSteps < MAX_STEPS && (process = workQueue.shift()))
 	{
-		numSteps = step(numSteps, process);
+		if (process.root)
+		{
+			numSteps = step(numSteps, process);
+		}
 	}
 	if (!process)
 	{
@@ -2982,13 +3187,21 @@ function endsWith(sub, str)
 function indexes(sub, str)
 {
 	var subLen = sub.length;
+	
+	if (subLen < 1)
+	{
+		return _elm_lang$core$Native_List.Nil;
+	}
+
 	var i = 0;
 	var is = [];
+
 	while ((i = str.indexOf(sub, i)) > -1)
 	{
 		is.push(i);
 		i = i + subLen;
-	}
+	}	
+	
 	return _elm_lang$core$Native_List.fromArray(is);
 }
 
@@ -3117,6 +3330,7 @@ return {
 };
 
 }();
+
 //import Native.Utils //
 
 var _elm_lang$core$Native_Char = function() {
@@ -3302,33 +3516,50 @@ var _elm_lang$core$Dict$merge = F6(
 	function (leftStep, bothStep, rightStep, leftDict, rightDict, initialResult) {
 		var stepState = F3(
 			function (rKey, rValue, _p2) {
-				var _p3 = _p2;
-				var _p9 = _p3._1;
-				var _p8 = _p3._0;
-				var _p4 = _p8;
-				if (_p4.ctor === '[]') {
-					return {
-						ctor: '_Tuple2',
-						_0: _p8,
-						_1: A3(rightStep, rKey, rValue, _p9)
-					};
-				} else {
-					var _p7 = _p4._1;
-					var _p6 = _p4._0._1;
-					var _p5 = _p4._0._0;
-					return (_elm_lang$core$Native_Utils.cmp(_p5, rKey) < 0) ? {
-						ctor: '_Tuple2',
-						_0: _p7,
-						_1: A3(leftStep, _p5, _p6, _p9)
-					} : ((_elm_lang$core$Native_Utils.cmp(_p5, rKey) > 0) ? {
-						ctor: '_Tuple2',
-						_0: _p8,
-						_1: A3(rightStep, rKey, rValue, _p9)
-					} : {
-						ctor: '_Tuple2',
-						_0: _p7,
-						_1: A4(bothStep, _p5, _p6, rValue, _p9)
-					});
+				stepState:
+				while (true) {
+					var _p3 = _p2;
+					var _p9 = _p3._1;
+					var _p8 = _p3._0;
+					var _p4 = _p8;
+					if (_p4.ctor === '[]') {
+						return {
+							ctor: '_Tuple2',
+							_0: _p8,
+							_1: A3(rightStep, rKey, rValue, _p9)
+						};
+					} else {
+						var _p7 = _p4._1;
+						var _p6 = _p4._0._1;
+						var _p5 = _p4._0._0;
+						if (_elm_lang$core$Native_Utils.cmp(_p5, rKey) < 0) {
+							var _v10 = rKey,
+								_v11 = rValue,
+								_v12 = {
+								ctor: '_Tuple2',
+								_0: _p7,
+								_1: A3(leftStep, _p5, _p6, _p9)
+							};
+							rKey = _v10;
+							rValue = _v11;
+							_p2 = _v12;
+							continue stepState;
+						} else {
+							if (_elm_lang$core$Native_Utils.cmp(_p5, rKey) > 0) {
+								return {
+									ctor: '_Tuple2',
+									_0: _p8,
+									_1: A3(rightStep, rKey, rValue, _p9)
+								};
+							} else {
+								return {
+									ctor: '_Tuple2',
+									_0: _p7,
+									_1: A4(bothStep, _p5, _p6, rValue, _p9)
+								};
+							}
+						}
+					}
 				}
 			});
 		var _p10 = A3(
@@ -3371,19 +3602,19 @@ var _elm_lang$core$Dict$reportRemBug = F4(
 	});
 var _elm_lang$core$Dict$isBBlack = function (dict) {
 	var _p13 = dict;
-	_v11_2:
+	_v14_2:
 	do {
 		if (_p13.ctor === 'RBNode_elm_builtin') {
 			if (_p13._0.ctor === 'BBlack') {
 				return true;
 			} else {
-				break _v11_2;
+				break _v14_2;
 			}
 		} else {
 			if (_p13._0.ctor === 'LBBlack') {
 				return true;
 			} else {
-				break _v11_2;
+				break _v14_2;
 			}
 		}
 	} while(false);
@@ -3397,10 +3628,10 @@ var _elm_lang$core$Dict$sizeHelp = F2(
 			if (_p14.ctor === 'RBEmpty_elm_builtin') {
 				return n;
 			} else {
-				var _v13 = A2(_elm_lang$core$Dict$sizeHelp, n + 1, _p14._4),
-					_v14 = _p14._3;
-				n = _v13;
-				dict = _v14;
+				var _v16 = A2(_elm_lang$core$Dict$sizeHelp, n + 1, _p14._4),
+					_v17 = _p14._3;
+				n = _v16;
+				dict = _v17;
 				continue sizeHelp;
 			}
 		}
@@ -3419,18 +3650,18 @@ var _elm_lang$core$Dict$get = F2(
 				var _p16 = A2(_elm_lang$core$Basics$compare, targetKey, _p15._1);
 				switch (_p16.ctor) {
 					case 'LT':
-						var _v17 = targetKey,
-							_v18 = _p15._3;
-						targetKey = _v17;
-						dict = _v18;
+						var _v20 = targetKey,
+							_v21 = _p15._3;
+						targetKey = _v20;
+						dict = _v21;
 						continue get;
 					case 'EQ':
 						return _elm_lang$core$Maybe$Just(_p15._2);
 					default:
-						var _v19 = targetKey,
-							_v20 = _p15._4;
-						targetKey = _v19;
-						dict = _v20;
+						var _v22 = targetKey,
+							_v23 = _p15._4;
+						targetKey = _v22;
+						dict = _v23;
 						continue get;
 				}
 			}
@@ -3453,12 +3684,12 @@ var _elm_lang$core$Dict$maxWithDefault = F3(
 			if (_p18.ctor === 'RBEmpty_elm_builtin') {
 				return {ctor: '_Tuple2', _0: k, _1: v};
 			} else {
-				var _v23 = _p18._1,
-					_v24 = _p18._2,
-					_v25 = _p18._4;
-				k = _v23;
-				v = _v24;
-				r = _v25;
+				var _v26 = _p18._1,
+					_v27 = _p18._2,
+					_v28 = _p18._4;
+				k = _v26;
+				v = _v27;
+				r = _v28;
 				continue maxWithDefault;
 			}
 		}
@@ -3584,19 +3815,19 @@ var _elm_lang$core$Dict$redden = function (t) {
 };
 var _elm_lang$core$Dict$balanceHelp = function (tree) {
 	var _p27 = tree;
-	_v33_6:
+	_v36_6:
 	do {
-		_v33_5:
+		_v36_5:
 		do {
-			_v33_4:
+			_v36_4:
 			do {
-				_v33_3:
+				_v36_3:
 				do {
-					_v33_2:
+					_v36_2:
 					do {
-						_v33_1:
+						_v36_1:
 						do {
-							_v33_0:
+							_v36_0:
 							do {
 								if (_p27.ctor === 'RBNode_elm_builtin') {
 									if (_p27._3.ctor === 'RBNode_elm_builtin') {
@@ -3606,44 +3837,44 @@ var _elm_lang$core$Dict$balanceHelp = function (tree) {
 													switch (_p27._4._0.ctor) {
 														case 'Red':
 															if ((_p27._3._3.ctor === 'RBNode_elm_builtin') && (_p27._3._3._0.ctor === 'Red')) {
-																break _v33_0;
+																break _v36_0;
 															} else {
 																if ((_p27._3._4.ctor === 'RBNode_elm_builtin') && (_p27._3._4._0.ctor === 'Red')) {
-																	break _v33_1;
+																	break _v36_1;
 																} else {
 																	if ((_p27._4._3.ctor === 'RBNode_elm_builtin') && (_p27._4._3._0.ctor === 'Red')) {
-																		break _v33_2;
+																		break _v36_2;
 																	} else {
 																		if ((_p27._4._4.ctor === 'RBNode_elm_builtin') && (_p27._4._4._0.ctor === 'Red')) {
-																			break _v33_3;
+																			break _v36_3;
 																		} else {
-																			break _v33_6;
+																			break _v36_6;
 																		}
 																	}
 																}
 															}
 														case 'NBlack':
 															if ((_p27._3._3.ctor === 'RBNode_elm_builtin') && (_p27._3._3._0.ctor === 'Red')) {
-																break _v33_0;
+																break _v36_0;
 															} else {
 																if ((_p27._3._4.ctor === 'RBNode_elm_builtin') && (_p27._3._4._0.ctor === 'Red')) {
-																	break _v33_1;
+																	break _v36_1;
 																} else {
 																	if (((((_p27._0.ctor === 'BBlack') && (_p27._4._3.ctor === 'RBNode_elm_builtin')) && (_p27._4._3._0.ctor === 'Black')) && (_p27._4._4.ctor === 'RBNode_elm_builtin')) && (_p27._4._4._0.ctor === 'Black')) {
-																		break _v33_4;
+																		break _v36_4;
 																	} else {
-																		break _v33_6;
+																		break _v36_6;
 																	}
 																}
 															}
 														default:
 															if ((_p27._3._3.ctor === 'RBNode_elm_builtin') && (_p27._3._3._0.ctor === 'Red')) {
-																break _v33_0;
+																break _v36_0;
 															} else {
 																if ((_p27._3._4.ctor === 'RBNode_elm_builtin') && (_p27._3._4._0.ctor === 'Red')) {
-																	break _v33_1;
+																	break _v36_1;
 																} else {
-																	break _v33_6;
+																	break _v36_6;
 																}
 															}
 													}
@@ -3651,81 +3882,81 @@ var _elm_lang$core$Dict$balanceHelp = function (tree) {
 													switch (_p27._4._0.ctor) {
 														case 'Red':
 															if ((_p27._4._3.ctor === 'RBNode_elm_builtin') && (_p27._4._3._0.ctor === 'Red')) {
-																break _v33_2;
+																break _v36_2;
 															} else {
 																if ((_p27._4._4.ctor === 'RBNode_elm_builtin') && (_p27._4._4._0.ctor === 'Red')) {
-																	break _v33_3;
+																	break _v36_3;
 																} else {
 																	if (((((_p27._0.ctor === 'BBlack') && (_p27._3._3.ctor === 'RBNode_elm_builtin')) && (_p27._3._3._0.ctor === 'Black')) && (_p27._3._4.ctor === 'RBNode_elm_builtin')) && (_p27._3._4._0.ctor === 'Black')) {
-																		break _v33_5;
+																		break _v36_5;
 																	} else {
-																		break _v33_6;
+																		break _v36_6;
 																	}
 																}
 															}
 														case 'NBlack':
 															if (_p27._0.ctor === 'BBlack') {
 																if ((((_p27._4._3.ctor === 'RBNode_elm_builtin') && (_p27._4._3._0.ctor === 'Black')) && (_p27._4._4.ctor === 'RBNode_elm_builtin')) && (_p27._4._4._0.ctor === 'Black')) {
-																	break _v33_4;
+																	break _v36_4;
 																} else {
 																	if ((((_p27._3._3.ctor === 'RBNode_elm_builtin') && (_p27._3._3._0.ctor === 'Black')) && (_p27._3._4.ctor === 'RBNode_elm_builtin')) && (_p27._3._4._0.ctor === 'Black')) {
-																		break _v33_5;
+																		break _v36_5;
 																	} else {
-																		break _v33_6;
+																		break _v36_6;
 																	}
 																}
 															} else {
-																break _v33_6;
+																break _v36_6;
 															}
 														default:
 															if (((((_p27._0.ctor === 'BBlack') && (_p27._3._3.ctor === 'RBNode_elm_builtin')) && (_p27._3._3._0.ctor === 'Black')) && (_p27._3._4.ctor === 'RBNode_elm_builtin')) && (_p27._3._4._0.ctor === 'Black')) {
-																break _v33_5;
+																break _v36_5;
 															} else {
-																break _v33_6;
+																break _v36_6;
 															}
 													}
 												default:
 													switch (_p27._4._0.ctor) {
 														case 'Red':
 															if ((_p27._4._3.ctor === 'RBNode_elm_builtin') && (_p27._4._3._0.ctor === 'Red')) {
-																break _v33_2;
+																break _v36_2;
 															} else {
 																if ((_p27._4._4.ctor === 'RBNode_elm_builtin') && (_p27._4._4._0.ctor === 'Red')) {
-																	break _v33_3;
+																	break _v36_3;
 																} else {
-																	break _v33_6;
+																	break _v36_6;
 																}
 															}
 														case 'NBlack':
 															if (((((_p27._0.ctor === 'BBlack') && (_p27._4._3.ctor === 'RBNode_elm_builtin')) && (_p27._4._3._0.ctor === 'Black')) && (_p27._4._4.ctor === 'RBNode_elm_builtin')) && (_p27._4._4._0.ctor === 'Black')) {
-																break _v33_4;
+																break _v36_4;
 															} else {
-																break _v33_6;
+																break _v36_6;
 															}
 														default:
-															break _v33_6;
+															break _v36_6;
 													}
 											}
 										} else {
 											switch (_p27._3._0.ctor) {
 												case 'Red':
 													if ((_p27._3._3.ctor === 'RBNode_elm_builtin') && (_p27._3._3._0.ctor === 'Red')) {
-														break _v33_0;
+														break _v36_0;
 													} else {
 														if ((_p27._3._4.ctor === 'RBNode_elm_builtin') && (_p27._3._4._0.ctor === 'Red')) {
-															break _v33_1;
+															break _v36_1;
 														} else {
-															break _v33_6;
+															break _v36_6;
 														}
 													}
 												case 'NBlack':
 													if (((((_p27._0.ctor === 'BBlack') && (_p27._3._3.ctor === 'RBNode_elm_builtin')) && (_p27._3._3._0.ctor === 'Black')) && (_p27._3._4.ctor === 'RBNode_elm_builtin')) && (_p27._3._4._0.ctor === 'Black')) {
-														break _v33_5;
+														break _v36_5;
 													} else {
-														break _v33_6;
+														break _v36_6;
 													}
 												default:
-													break _v33_6;
+													break _v36_6;
 											}
 										}
 									} else {
@@ -3733,29 +3964,29 @@ var _elm_lang$core$Dict$balanceHelp = function (tree) {
 											switch (_p27._4._0.ctor) {
 												case 'Red':
 													if ((_p27._4._3.ctor === 'RBNode_elm_builtin') && (_p27._4._3._0.ctor === 'Red')) {
-														break _v33_2;
+														break _v36_2;
 													} else {
 														if ((_p27._4._4.ctor === 'RBNode_elm_builtin') && (_p27._4._4._0.ctor === 'Red')) {
-															break _v33_3;
+															break _v36_3;
 														} else {
-															break _v33_6;
+															break _v36_6;
 														}
 													}
 												case 'NBlack':
 													if (((((_p27._0.ctor === 'BBlack') && (_p27._4._3.ctor === 'RBNode_elm_builtin')) && (_p27._4._3._0.ctor === 'Black')) && (_p27._4._4.ctor === 'RBNode_elm_builtin')) && (_p27._4._4._0.ctor === 'Black')) {
-														break _v33_4;
+														break _v36_4;
 													} else {
-														break _v33_6;
+														break _v36_6;
 													}
 												default:
-													break _v33_6;
+													break _v36_6;
 											}
 										} else {
-											break _v33_6;
+											break _v36_6;
 										}
 									}
 								} else {
-									break _v33_6;
+									break _v36_6;
 								}
 							} while(false);
 							return _elm_lang$core$Dict$balancedTree(_p27._0)(_p27._3._3._1)(_p27._3._3._2)(_p27._3._1)(_p27._3._2)(_p27._1)(_p27._2)(_p27._3._3._3)(_p27._3._3._4)(_p27._3._4)(_p27._4);
@@ -5713,6 +5944,11 @@ function badOneOf(problems)
 	return { tag: 'oneOf', problems: problems };
 }
 
+function badCustom(msg)
+{
+	return { tag: 'custom', msg: msg };
+}
+
 function bad(msg)
 {
 	return { tag: 'fail', msg: msg };
@@ -5749,6 +5985,11 @@ function badToString(problem)
 				return 'I ran into the following problems'
 					+ (context === '_' ? '' : ' at ' + context)
 					+ ':\n\n' + problems.join('\n');
+
+			case 'custom':
+				return 'A `customDecoder` failed'
+					+ (context === '_' ? '' : ' at ' + context)
+					+ ' with the message: ' + problem.msg;
 
 			case 'fail':
 				return 'I ran into a `fail` decoder'
@@ -5952,7 +6193,7 @@ function runHelp(decoder, value)
 			var realResult = decoder.callback(result.value);
 			if (realResult.ctor === 'Err')
 			{
-				return badPrimitive('something custom', value);
+				return badCustom(realResult._0);
 			}
 			return ok(realResult._0);
 
@@ -6364,9 +6605,150 @@ function on(node)
 	};
 }
 
+var rAF = typeof requestAnimationFrame !== 'undefined'
+	? requestAnimationFrame
+	: function(callback) { callback(); };
+
+function withNode(id, doStuff)
+{
+	return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
+	{
+		rAF(function()
+		{
+			var node = document.getElementById(id);
+			if (node === null)
+			{
+				callback(_elm_lang$core$Native_Scheduler.fail({ ctor: 'NotFound', _0: id }));
+				return;
+			}
+			callback(_elm_lang$core$Native_Scheduler.succeed(doStuff(node)));
+		});
+	});
+}
+
+
+// FOCUS
+
+function focus(id)
+{
+	return withNode(id, function(node) {
+		node.focus();
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function blur(id)
+{
+	return withNode(id, function(node) {
+		node.blur();
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+
+// SCROLLING
+
+function getScrollTop(id)
+{
+	return withNode(id, function(node) {
+		return node.scrollTop;
+	});
+}
+
+function setScrollTop(id, desiredScrollTop)
+{
+	return withNode(id, function(node) {
+		node.scrollTop = desiredScrollTop;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function toBottom(id)
+{
+	return withNode(id, function(node) {
+		node.scrollTop = node.scrollHeight;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function getScrollLeft(id)
+{
+	return withNode(id, function(node) {
+		return node.scrollLeft;
+	});
+}
+
+function setScrollLeft(id, desiredScrollLeft)
+{
+	return withNode(id, function(node) {
+		node.scrollLeft = desiredScrollLeft;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function toRight(id)
+{
+	return withNode(id, function(node) {
+		node.scrollLeft = node.scrollWidth;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+
+// SIZE
+
+function width(options, id)
+{
+	return withNode(id, function(node) {
+		switch (options.ctor)
+		{
+			case 'Content':
+				return node.scrollWidth;
+			case 'VisibleContent':
+				return node.clientWidth;
+			case 'VisibleContentWithBorders':
+				return node.offsetWidth;
+			case 'VisibleContentWithBordersAndMargins':
+				var rect = node.getBoundingClientRect();
+				return rect.right - rect.left;
+		}
+	});
+}
+
+function height(options, id)
+{
+	return withNode(id, function(node) {
+		switch (options.ctor)
+		{
+			case 'Content':
+				return node.scrollHeight;
+			case 'VisibleContent':
+				return node.clientHeight;
+			case 'VisibleContentWithBorders':
+				return node.offsetHeight;
+			case 'VisibleContentWithBordersAndMargins':
+				var rect = node.getBoundingClientRect();
+				return rect.bottom - rect.top;
+		}
+	});
+}
+
 return {
 	onDocument: F3(on(document)),
-	onWindow: F3(on(window))
+	onWindow: F3(on(window)),
+
+	focus: focus,
+	blur: blur,
+
+	getScrollTop: getScrollTop,
+	setScrollTop: F2(setScrollTop),
+	getScrollLeft: getScrollLeft,
+	setScrollLeft: F2(setScrollLeft),
+	toBottom: toBottom,
+	toRight: toRight,
+
+	height: F2(height),
+	width: F2(width)
 };
 
 }();
@@ -7665,7 +8047,7 @@ function applyPatch(domNode, patch)
 	switch (patch.type)
 	{
 		case 'p-redraw':
-			return redraw(domNode, patch.data, patch.eventNode);
+			return applyPatchRedraw(domNode, patch.data, patch.eventNode);
 
 		case 'p-facts':
 			applyFacts(domNode, patch.eventNode, patch.data);
@@ -7714,57 +8096,7 @@ function applyPatch(domNode, patch)
 			return domNode;
 
 		case 'p-reorder':
-			var data = patch.data;
-
-			// end inserts
-			var endInserts = data.endInserts;
-			var end;
-			if (typeof endInserts !== 'undefined')
-			{
-				if (endInserts.length === 1)
-				{
-					var insert = endInserts[0];
-					var entry = insert.entry;
-					var end = entry.tag === 'move'
-						? entry.data
-						: render(entry.vnode, patch.eventNode);
-				}
-				else
-				{
-					end = document.createDocumentFragment();
-					for (var i = 0; i < endInserts.length; i++)
-					{
-						var insert = endInserts[i];
-						var entry = insert.entry;
-						var node = entry.tag === 'move'
-							? entry.data
-							: render(entry.vnode, patch.eventNode);
-						end.appendChild(node);
-					}
-				}
-			}
-
-			// removals
-			domNode = applyPatchesHelp(domNode, data.patches);
-
-			// inserts
-			var inserts = data.inserts;
-			for (var i = 0; i < inserts.length; i++)
-			{
-				var insert = inserts[i];
-				var entry = insert.entry;
-				var node = entry.tag === 'move'
-					? entry.data
-					: render(entry.vnode, patch.eventNode);
-				domNode.insertBefore(node, domNode.childNodes[insert.index]);
-			}
-
-			if (typeof end !== 'undefined')
-			{
-				domNode.appendChild(end);
-			}
-
-			return domNode;
+			return applyPatchReorder(domNode, patch);
 
 		case 'p-custom':
 			var impl = patch.data;
@@ -7776,7 +8108,7 @@ function applyPatch(domNode, patch)
 }
 
 
-function redraw(domNode, vNode, eventNode)
+function applyPatchRedraw(domNode, vNode, eventNode)
 {
 	var parentNode = domNode.parentNode;
 	var newNode = render(vNode, eventNode);
@@ -7791,6 +8123,59 @@ function redraw(domNode, vNode, eventNode)
 		parentNode.replaceChild(newNode, domNode);
 	}
 	return newNode;
+}
+
+
+function applyPatchReorder(domNode, patch)
+{
+	var data = patch.data;
+
+	// remove end inserts
+	var frag = applyPatchReorderEndInsertsHelp(data.endInserts, patch);
+
+	// removals
+	domNode = applyPatchesHelp(domNode, data.patches);
+
+	// inserts
+	var inserts = data.inserts;
+	for (var i = 0; i < inserts.length; i++)
+	{
+		var insert = inserts[i];
+		var entry = insert.entry;
+		var node = entry.tag === 'move'
+			? entry.data
+			: render(entry.vnode, patch.eventNode);
+		domNode.insertBefore(node, domNode.childNodes[insert.index]);
+	}
+
+	// add end inserts
+	if (typeof frag !== 'undefined')
+	{
+		domNode.appendChild(frag);
+	}
+
+	return domNode;
+}
+
+
+function applyPatchReorderEndInsertsHelp(endInserts, patch)
+{
+	if (typeof endInserts === 'undefined')
+	{
+		return;
+	}
+
+	var frag = document.createDocumentFragment();
+	for (var i = 0; i < endInserts.length; i++)
+	{
+		var insert = endInserts[i];
+		var entry = insert.entry;
+		frag.appendChild(entry.tag === 'move'
+			? entry.data
+			: render(entry.vnode, patch.eventNode)
+		);
+	}
+	return frag;
 }
 
 
@@ -9185,9 +9570,7 @@ var _user$project$BoardViewer$missileSymbolDef = A2(
 		[
 			_elm_lang$svg$Svg_Attributes$id('missile'),
 			_elm_lang$svg$Svg_Attributes$preserveAspectRatio('xMinYMin meet'),
-			_elm_lang$svg$Svg_Attributes$viewBox('0 0 130 75'),
-			_elm_lang$svg$Svg_Attributes$width('4em'),
-			_elm_lang$svg$Svg_Attributes$height('2em')
+			_elm_lang$svg$Svg_Attributes$viewBox('0 0 50 28')
 		]),
 	_elm_lang$core$Native_List.fromArray(
 		[
@@ -9195,7 +9578,7 @@ var _user$project$BoardViewer$missileSymbolDef = A2(
 			_elm_lang$svg$Svg$g,
 			_elm_lang$core$Native_List.fromArray(
 				[
-					_elm_lang$svg$Svg_Attributes$transform('translate(-82.101276,-58.617676)')
+					_elm_lang$svg$Svg_Attributes$transform('matrix(1.077 0 0 1.0426 -88.42 -61.208)')
 				]),
 			_elm_lang$core$Native_List.fromArray(
 				[
@@ -9203,139 +9586,64 @@ var _user$project$BoardViewer$missileSymbolDef = A2(
 					_elm_lang$svg$Svg$g,
 					_elm_lang$core$Native_List.fromArray(
 						[
-							_elm_lang$svg$Svg_Attributes$transform('translate(0,50)'),
-							_elm_lang$svg$Svg_Attributes$id('layer1')
+							_elm_lang$svg$Svg_Attributes$transform('translate(0,50)')
 						]),
 					_elm_lang$core$Native_List.fromArray(
 						[
 							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5318'),
-									_elm_lang$svg$Svg_Attributes$d('m 83.082915,22.775378 c 0,0 2.55536,-5.50963 5.91919,-5.50963 3.36383,0 3.36383,0 3.36383,0'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5320'),
-									_elm_lang$svg$Svg_Attributes$d('m 83.008455,22.623588 c 0,0 2.55535,5.50965 5.91918,5.50965 3.36383,0 3.36383,0 3.36383,0'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5328'),
-									_elm_lang$svg$Svg_Attributes$d('m 89.207215,17.265748 7.99935,-0.14891 c 0,0 3.979155,-1.19128 4.717555,-1.19128 0.7384,0 0.80066,0.0251 0.80066,0.0251'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5330'),
-									_elm_lang$svg$Svg_Attributes$d('m 89.505205,28.066068 7.99936,0.1489 c 0,0 3.979145,1.19127 4.717545,1.19127 0.7384,0 0.52807,0 0.52807,0'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5332'),
-									_elm_lang$svg$Svg_Attributes$d('m 102.78559,15.925558 1.4768,-4.02054 8.12241,0.29783 0.95686,-0.0934 0.0277,5.9009 -5.2925,0.007 -5.29249,0.007 -0.41022,-0.002 z'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5334'),
-									_elm_lang$svg$Svg_Attributes$d('m 113.37074,16.214498 13.08471,0.15779 c 0,0 1.03117,0.74455 1.03117,4.76509 0,4.02055 0,4.02055 0,4.02055'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
 							_elm_lang$svg$Svg$g,
 							_elm_lang$core$Native_List.fromArray(
 								[
-									_elm_lang$svg$Svg_Attributes$transform('matrix(0,-0.18804765,0.0518044,0,83.041305,34.248328)'),
-									_elm_lang$svg$Svg_Attributes$id('g3097'),
-									_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:20.2634182;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1')
+									_elm_lang$svg$Svg_Attributes$stroke('#000'),
+									_elm_lang$svg$Svg_Attributes$strokeWidth('2')
 								]),
 							_elm_lang$core$Native_List.fromArray(
 								[
 									A2(
-									_elm_lang$svg$Svg$polygon,
+									_elm_lang$svg$Svg$path,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:20.2634182;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('polygon3099'),
-											_elm_lang$svg$Svg_Attributes$points('126.167,829.411 85.79,825.077 85.333,781.735 85.333,781.735 126.167,803.178 ')
+											_elm_lang$svg$Svg_Attributes$d('m83.083 22.775s2.5554-5.5096 5.9192-5.5096h3.3638')
 										]),
 									_elm_lang$core$Native_List.fromArray(
 										[])),
 									A2(
-									_elm_lang$svg$Svg$polygon,
+									_elm_lang$svg$Svg$path,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:20.2634182;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('polygon3101'),
-											_elm_lang$svg$Svg_Attributes$points('126.167,829.411 85.79,825.077 85.333,781.735 85.333,781.735 126.167,803.178 ')
-										]),
-									_elm_lang$core$Native_List.fromArray(
-										[]))
-								])),
-							A2(
-							_elm_lang$svg$Svg$path,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$id('path5340'),
-									_elm_lang$svg$Svg_Attributes$d('m 113.40345,29.091388 13.0383,-0.1134 c 0,0 1.03118,-0.74455 1.03118,-4.76508 0,-4.02055 0,-4.02055 0,-4.02055'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[])),
-							A2(
-							_elm_lang$svg$Svg$g,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$transform('matrix(0,-0.18804765,0.0518044,0,83.030475,33.748568)'),
-									_elm_lang$svg$Svg_Attributes$id('g3103'),
-									_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:20.2634182;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[
-									A2(
-									_elm_lang$svg$Svg$polygon,
-									_elm_lang$core$Native_List.fromArray(
-										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:20.2634182;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('polygon3105'),
-											_elm_lang$svg$Svg_Attributes$points('0.5,830.412 40.877,826.078 41.333,782.736 41.333,782.736 0.5,804.179 ')
+											_elm_lang$svg$Svg_Attributes$d('m83.008 22.624s2.5554 5.5096 5.9192 5.5096h3.3638')
 										]),
 									_elm_lang$core$Native_List.fromArray(
 										[])),
 									A2(
-									_elm_lang$svg$Svg$polygon,
+									_elm_lang$svg$Svg$path,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:20.2634182;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('polygon3107'),
-											_elm_lang$svg$Svg_Attributes$points('0.5,830.412 40.877,826.078 41.333,782.736 41.333,782.736 0.5,804.179 ')
+											_elm_lang$svg$Svg_Attributes$d('m89.207 17.266 7.9994-0.14891s3.9792-1.1913 4.7176-1.1913 0.80066 0.0251 0.80066 0.0251')
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[])),
+									A2(
+									_elm_lang$svg$Svg$path,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg_Attributes$d('m89.505 28.066 7.9994 0.1489s3.9791 1.1913 4.7175 1.1913h0.52807')
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[])),
+									A2(
+									_elm_lang$svg$Svg$path,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg_Attributes$d('m102.79 15.926 1.4768-4.0205 8.1224 0.29783 0.95686-0.0934 0.0277 5.9009-5.2925 0.007-5.2925 0.007-0.41022-0.002z')
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[])),
+									A2(
+									_elm_lang$svg$Svg$path,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg_Attributes$d('m113.37 16.214 13.085 0.15779s1.0312 0.74455 1.0312 4.7651v4.0206')
 										]),
 									_elm_lang$core$Native_List.fromArray(
 										[]))
@@ -9344,365 +9652,433 @@ var _user$project$BoardViewer$missileSymbolDef = A2(
 							_elm_lang$svg$Svg$g,
 							_elm_lang$core$Native_List.fromArray(
 								[
-									_elm_lang$svg$Svg_Attributes$transform('matrix(0,-0.20839474,0.0518044,0,83.018555,35.972858)'),
-									_elm_lang$svg$Svg_Attributes$id('g3124'),
-									_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:19.24878311;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
+									_elm_lang$svg$Svg_Attributes$transform('matrix(0 -.18805 .051804 0 83.041 34.248)'),
+									_elm_lang$svg$Svg_Attributes$stroke('#000'),
+									_elm_lang$svg$Svg_Attributes$strokeWidth('20.263')
 								]),
 							_elm_lang$core$Native_List.fromArray(
 								[
 									A2(
-									_elm_lang$svg$Svg$linearGradient,
+									_elm_lang$svg$Svg$polygon,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$y2('849.69629'),
-											_elm_lang$svg$Svg_Attributes$x2('93.855003'),
-											_elm_lang$svg$Svg_Attributes$y1('849.69629'),
-											_elm_lang$svg$Svg_Attributes$x1('33.579102'),
-											_elm_lang$svg$Svg_Attributes$gradientUnits('userSpaceOnUse'),
-											_elm_lang$svg$Svg_Attributes$id('linearGradient3126')
+											_elm_lang$svg$Svg_Attributes$points('126.17 803.18 126.17 829.41 85.79 825.08 85.333 781.74 85.333 781.74')
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[])),
+									A2(
+									_elm_lang$svg$Svg$polygon,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg_Attributes$points('126.17 803.18 126.17 829.41 85.79 825.08 85.333 781.74 85.333 781.74')
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[]))
+								])),
+							A2(
+							_elm_lang$svg$Svg$path,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg_Attributes$d('m113.4 29.091 13.038-0.1134s1.0312-0.74455 1.0312-4.7651v-4.0206'),
+									_elm_lang$svg$Svg_Attributes$stroke('#000'),
+									_elm_lang$svg$Svg_Attributes$strokeWidth('2')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[])),
+							A2(
+							_elm_lang$svg$Svg$g,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg_Attributes$stroke('#000')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									A2(
+									_elm_lang$svg$Svg$g,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg_Attributes$transform('matrix(0 -.18805 .051804 0 83.03 33.749)'),
+											_elm_lang$svg$Svg_Attributes$strokeWidth('20.263')
 										]),
 									_elm_lang$core$Native_List.fromArray(
 										[
 											A2(
-											_elm_lang$svg$Svg$stop,
+											_elm_lang$svg$Svg$polygon,
 											_elm_lang$core$Native_List.fromArray(
 												[
-													_elm_lang$svg$Svg_Attributes$id('stop3128'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(92, 93, 99);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0056')
+													_elm_lang$svg$Svg_Attributes$points('0.5 804.18 0.5 830.41 40.877 826.08 41.333 782.74 41.333 782.74')
 												]),
 											_elm_lang$core$Native_List.fromArray(
 												[])),
 											A2(
-											_elm_lang$svg$Svg$stop,
+											_elm_lang$svg$Svg$polygon,
 											_elm_lang$core$Native_List.fromArray(
 												[
-													_elm_lang$svg$Svg_Attributes$id('stop3130'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(114, 114, 118);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0244')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3132'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(153, 152, 153);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0589')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3134'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(187, 185, 186);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0939')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3136'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(214, 213, 215);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.1293')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3138'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(230, 229, 232);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.1651')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3140'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(236, 235, 239);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.2022')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3142'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(214, 214, 215);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.2697')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3144'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(154, 153, 154);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.5041')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3146'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(117, 117, 120);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.7124')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3148'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(95, 97, 102);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.8849')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3150'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(88, 90, 96);'),
-													_elm_lang$svg$Svg_Attributes$offset('1')
+													_elm_lang$svg$Svg_Attributes$points('0.5 804.18 0.5 830.41 40.877 826.08 41.333 782.74 41.333 782.74')
 												]),
 											_elm_lang$core$Native_List.fromArray(
 												[]))
 										])),
 									A2(
-									_elm_lang$svg$Svg$rect,
+									_elm_lang$svg$Svg$g,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:19.24878311;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('rect3152'),
-											_elm_lang$svg$Svg_Attributes$height('22.357'),
-											_elm_lang$svg$Svg_Attributes$width('60.276001'),
-											_elm_lang$svg$Svg_Attributes$y('838.51801'),
-											_elm_lang$svg$Svg_Attributes$x('33.578999')
-										]),
-									_elm_lang$core$Native_List.fromArray(
-										[])),
-									A2(
-									_elm_lang$svg$Svg$rect,
-									_elm_lang$core$Native_List.fromArray(
-										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:19.24878311;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('rect3154'),
-											_elm_lang$svg$Svg_Attributes$height('22.357'),
-											_elm_lang$svg$Svg_Attributes$width('60.276001'),
-											_elm_lang$svg$Svg_Attributes$y('838.51801'),
-											_elm_lang$svg$Svg_Attributes$x('33.578999')
-										]),
-									_elm_lang$core$Native_List.fromArray(
-										[]))
-								])),
-							A2(
-							_elm_lang$svg$Svg$g,
-							_elm_lang$core$Native_List.fromArray(
-								[
-									_elm_lang$svg$Svg_Attributes$transform('matrix(0,-0.20839474,0.0518044,0,83.018555,35.972858)'),
-									_elm_lang$svg$Svg_Attributes$id('g3156'),
-									_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:19.24878311;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
-								]),
-							_elm_lang$core$Native_List.fromArray(
-								[
-									A2(
-									_elm_lang$svg$Svg$linearGradient,
-									_elm_lang$core$Native_List.fromArray(
-										[
-											_elm_lang$svg$Svg_Attributes$y2('852.71191'),
-											_elm_lang$svg$Svg_Attributes$x2('96.061501'),
-											_elm_lang$svg$Svg_Attributes$y1('852.71191'),
-											_elm_lang$svg$Svg_Attributes$x1('31.195801'),
-											_elm_lang$svg$Svg_Attributes$gradientUnits('userSpaceOnUse'),
-											_elm_lang$svg$Svg_Attributes$id('linearGradient3158')
+											_elm_lang$svg$Svg_Attributes$transform('matrix(0 -.20839 .051804 0 83.019 35.973)'),
+											_elm_lang$svg$Svg_Attributes$strokeWidth('19.249')
 										]),
 									_elm_lang$core$Native_List.fromArray(
 										[
 											A2(
-											_elm_lang$svg$Svg$stop,
+											_elm_lang$svg$Svg$rect,
 											_elm_lang$core$Native_List.fromArray(
 												[
-													_elm_lang$svg$Svg_Attributes$id('stop3160'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(92, 93, 99);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0056')
+													_elm_lang$svg$Svg_Attributes$height('22.357'),
+													_elm_lang$svg$Svg_Attributes$width('60.276'),
+													_elm_lang$svg$Svg_Attributes$y('838.52'),
+													_elm_lang$svg$Svg_Attributes$x('33.579')
 												]),
 											_elm_lang$core$Native_List.fromArray(
 												[])),
 											A2(
-											_elm_lang$svg$Svg$stop,
+											_elm_lang$svg$Svg$rect,
 											_elm_lang$core$Native_List.fromArray(
 												[
-													_elm_lang$svg$Svg_Attributes$id('stop3162'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(114, 114, 118);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0244')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3164'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(153, 152, 153);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0589')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3166'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(187, 185, 186);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.0939')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3168'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(214, 213, 215);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.1293')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3170'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(230, 229, 232);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.1651')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3172'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(236, 235, 239);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.2022')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3174'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(214, 214, 215);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.2697')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3176'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(154, 153, 154);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.5041')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3178'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(117, 117, 120);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.7124')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3180'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(95, 97, 102);'),
-													_elm_lang$svg$Svg_Attributes$offset('0.8849')
-												]),
-											_elm_lang$core$Native_List.fromArray(
-												[])),
-											A2(
-											_elm_lang$svg$Svg$stop,
-											_elm_lang$core$Native_List.fromArray(
-												[
-													_elm_lang$svg$Svg_Attributes$id('stop3182'),
-													_elm_lang$svg$Svg_Attributes$style('stop-color: rgb(88, 90, 96);'),
-													_elm_lang$svg$Svg_Attributes$offset('1')
+													_elm_lang$svg$Svg_Attributes$height('22.357'),
+													_elm_lang$svg$Svg_Attributes$width('60.276'),
+													_elm_lang$svg$Svg_Attributes$y('838.52'),
+													_elm_lang$svg$Svg_Attributes$x('33.579')
 												]),
 											_elm_lang$core$Native_List.fromArray(
 												[]))
 										])),
 									A2(
-									_elm_lang$svg$Svg$rect,
+									_elm_lang$svg$Svg$g,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:19.24878311;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('rect3184'),
-											_elm_lang$svg$Svg_Attributes$height('9.2670002'),
-											_elm_lang$svg$Svg_Attributes$width('64.865997'),
-											_elm_lang$svg$Svg_Attributes$y('848.078'),
-											_elm_lang$svg$Svg_Attributes$x('31.195999')
+											_elm_lang$svg$Svg_Attributes$transform('matrix(0 -.20839 .051804 0 83.019 35.973)'),
+											_elm_lang$svg$Svg_Attributes$strokeWidth('19.249')
 										]),
-									_elm_lang$core$Native_List.fromArray(
-										[])),
-									A2(
-									_elm_lang$svg$Svg$rect,
 									_elm_lang$core$Native_List.fromArray(
 										[
-											_elm_lang$svg$Svg_Attributes$style('fill:#ffffff;stroke-width:19.24878311;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1'),
-											_elm_lang$svg$Svg_Attributes$id('rect3186'),
-											_elm_lang$svg$Svg_Attributes$height('9.2670002'),
-											_elm_lang$svg$Svg_Attributes$width('64.865997'),
-											_elm_lang$svg$Svg_Attributes$y('848.078'),
-											_elm_lang$svg$Svg_Attributes$x('31.195999')
-										]),
-									_elm_lang$core$Native_List.fromArray(
-										[]))
+											A2(
+											_elm_lang$svg$Svg$rect,
+											_elm_lang$core$Native_List.fromArray(
+												[
+													_elm_lang$svg$Svg_Attributes$height('9.267'),
+													_elm_lang$svg$Svg_Attributes$width('64.866'),
+													_elm_lang$svg$Svg_Attributes$y('848.08'),
+													_elm_lang$svg$Svg_Attributes$x('31.196')
+												]),
+											_elm_lang$core$Native_List.fromArray(
+												[])),
+											A2(
+											_elm_lang$svg$Svg$rect,
+											_elm_lang$core$Native_List.fromArray(
+												[
+													_elm_lang$svg$Svg_Attributes$height('9.267'),
+													_elm_lang$svg$Svg_Attributes$width('64.866'),
+													_elm_lang$svg$Svg_Attributes$y('848.08'),
+													_elm_lang$svg$Svg_Attributes$x('31.196')
+												]),
+											_elm_lang$core$Native_List.fromArray(
+												[]))
+										]))
 								])),
 							A2(
 							_elm_lang$svg$Svg$path,
 							_elm_lang$core$Native_List.fromArray(
 								[
-									_elm_lang$svg$Svg_Attributes$id('path5332-6'),
-									_elm_lang$svg$Svg_Attributes$d('m 102.79988,29.515118 1.4768,4.02055 8.12241,-0.29781 0.95687,0.0934 0.0277,-5.90088 -5.2925,-0.007 -5.2925,-0.007 -0.41021,0.002 z'),
-									_elm_lang$svg$Svg_Attributes$style('fill:none;stroke-width:2;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1')
+									_elm_lang$svg$Svg_Attributes$d('m102.8 29.515 1.4768 4.0206 8.1224-0.29781 0.95687 0.0934 0.0277-5.9009-5.2925-0.007-5.2925-0.007-0.41021 0.002z'),
+									_elm_lang$svg$Svg_Attributes$stroke('#000'),
+									_elm_lang$svg$Svg_Attributes$strokeWidth('2')
 								]),
 							_elm_lang$core$Native_List.fromArray(
 								[]))
 						]))
 				]))
 		]));
+var _user$project$BoardViewer$missileHeightPx = 28;
+var _user$project$BoardViewer$missileWidthPx = 50;
+var _user$project$BoardViewer$missileHeightEm = 1.5;
+var _user$project$BoardViewer$missileWidthEm = 1.5;
+var _user$project$BoardViewer$tankWidthEm = 4.0;
+var _user$project$BoardViewer$tankHeightEm = 2.0;
+var _user$project$BoardViewer$colorGradientDefs = function (colorToId) {
+	return A2(
+		_elm_lang$core$List$map,
+		function (_p0) {
+			var _p1 = _p0;
+			var boardColor = 'white';
+			return A2(
+				_elm_lang$svg$Svg$radialGradient,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$svg$Svg_Attributes$id(_p1._1)
+					]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$svg$Svg$stop,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$svg$Svg_Attributes$offset('4%'),
+								_elm_lang$svg$Svg_Attributes$stopColor(_p1._0)
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+						A2(
+						_elm_lang$svg$Svg$stop,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$svg$Svg_Attributes$offset('96%'),
+								_elm_lang$svg$Svg_Attributes$stopColor(boardColor)
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[]))
+					]));
+		},
+		_elm_lang$core$Dict$toList(colorToId));
+};
+var _user$project$BoardViewer$viewInfoSection = function (model) {
+	var viewRobotInfo = function (ecr) {
+		var robotStyle = _elm_lang$html$Html_Attributes$style(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					{ctor: '_Tuple2', _0: 'color', _1: ecr.color}
+				]));
+		var robot = ecr.robot;
+		var robotStatus = A2(
+			_elm_lang$core$Basics_ops['++'],
+			' (',
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				_elm_lang$core$Basics$toString(
+					_elm_lang$core$Basics$round(robot.points)),
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					' / ',
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						_elm_lang$core$Basics$toString(
+							_elm_lang$core$Basics$round(robot.health)),
+						')'))));
+		return _elm_lang$core$Native_List.fromArray(
+			[
+				A2(
+				_elm_lang$html$Html$span,
+				_elm_lang$core$Native_List.fromArray(
+					[robotStyle]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$html$Html$text(ecr.name)
+					])),
+				_elm_lang$html$Html$text(robotStatus)
+			]);
+	};
+	var viewRobotsInfo = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text('Robots (points / health)')
+				])),
+			A2(
+			_elm_lang$html$Html$ul,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			A2(
+				_elm_lang$core$List$map,
+				function (_p2) {
+					var _p3 = _p2;
+					return A2(
+						_elm_lang$html$Html$li,
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						viewRobotInfo(_p3._1));
+				},
+				_elm_lang$core$Dict$values(model.robotInfo)))
+		]);
+	var fps = _elm_lang$core$Native_Utils.eq(model.totSeconds, 0.0) ? 0.0 : (_elm_lang$core$Basics$toFloat(model.totRedrawFrames) / model.totSeconds);
+	var viewModelDim = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'Sim. Time: ',
+						_elm_lang$core$Basics$toString(
+							_elm_lang$core$Basics$round(model.currentSimulationTime))))
+				])),
+			A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'FPS: ',
+						_elm_lang$core$Basics$toString(
+							_elm_lang$core$Basics$round(fps))))
+				]))
+		]);
+	var viewErrorMessages = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(
+			_elm_lang$html$Html$ul,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			A2(
+				_elm_lang$core$List$map,
+				function (msg) {
+					return A2(
+						_elm_lang$html$Html$li,
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$html$Html$text(msg)
+							]));
+				},
+				A2(_elm_lang$core$List$take, 10, model.errorMessages)))
+		]);
+	return A2(
+		_elm_lang$core$Basics_ops['++'],
+		viewRobotsInfo,
+		A2(_elm_lang$core$Basics_ops['++'], viewModelDim, viewErrorMessages));
+};
+var _user$project$BoardViewer$viewStreaming = function (model) {
+	var _p4 = model.isInitializated;
+	if (_p4 === false) {
+		return A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[]));
+	} else {
+		return A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'Streaming: ',
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							_elm_lang$core$Basics$toString(model.streamingLeft),
+							's')))
+				]));
+	}
+};
+var _user$project$BoardViewer$model_loadStreamedData = function (m1) {
+	var _p5 = m1.boardInfo;
+	if (_p5.ctor === 'Nothing') {
+		var _p6 = _elm_lang$core$List$head(
+			_elm_lang$core$Dict$keys(m1.streamedBoardInfo));
+		if (_p6.ctor === 'Nothing') {
+			return {ctor: '_Tuple2', _0: m1, _1: false};
+		} else {
+			var _p9 = _p6._0;
+			var _p7 = A2(_elm_lang$core$Dict$get, _p9, m1.streamedBoardInfo);
+			if (_p7.ctor === 'Nothing') {
+				return {ctor: '_Tuple2', _0: m1, _1: false};
+			} else {
+				var _p8 = _p7._0;
+				return {
+					ctor: '_Tuple2',
+					_0: _elm_lang$core$Native_Utils.update(
+						m1,
+						{
+							boardInfo: _elm_lang$core$Maybe$Just(_p8),
+							streamedBoardInfo: A2(_elm_lang$core$Dict$remove, _p9, m1.streamedBoardInfo),
+							nextEvents: _p8.events
+						}),
+					_1: true
+				};
+			}
+		}
+	} else {
+		return {ctor: '_Tuple2', _0: m1, _1: true};
+	}
+};
+var _user$project$BoardViewer$model_addStream = F2(
+	function (m, bi) {
+		return _elm_lang$core$Native_Utils.update(
+			m,
+			{
+				streamedBoardInfo: A3(_elm_lang$core$Dict$insert, bi.startTime, bi, m.streamedBoardInfo),
+				simulationIsStarted: m.simulationIsStarted || (_elm_lang$core$Native_Utils.cmp(
+					_elm_lang$core$Dict$size(m.streamedBoardInfo),
+					1) > -1)
+			});
+	});
+var _user$project$BoardViewer$cmd_make = function (msg) {
+	return A3(
+		_elm_lang$core$Task$perform,
+		_elm_lang$core$Basics$identity,
+		_elm_lang$core$Basics$identity,
+		_elm_lang$core$Task$succeed(msg));
+};
+var _user$project$BoardViewer$model_fromColorToExplosionGradientId = F2(
+	function (m, c) {
+		var _p10 = A2(_elm_lang$core$Dict$get, c, m.usedRobotColors);
+		if (_p10.ctor === 'Nothing') {
+			return 'red';
+		} else {
+			return A2(
+				_elm_lang$core$Basics_ops['++'],
+				'url(#',
+				A2(_elm_lang$core$Basics_ops['++'], _p10._0, ')'));
+		}
+	});
+var _user$project$BoardViewer$model_robotColor = F2(
+	function (m, id) {
+		var _p11 = A2(_elm_lang$core$Dict$get, id, m.robotInfo);
+		if (_p11.ctor === 'Nothing') {
+			return _elm_lang$core$Native_Utils.crashCase(
+				'BoardViewer',
+				{
+					start: {line: 290, column: 5},
+					end: {line: 292, column: 29}
+				},
+				_p11)('unexpeced error in the code: 1053');
+		} else {
+			return _p11._0._1.color;
+		}
+	});
+var _user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime = F2(
+	function (bi, s) {
+		return (bi.turnDeltaTime / bi.networkLatency) * s;
+	});
+var _user$project$BoardViewer$toEm = function (n) {
+	return A2(
+		_elm_lang$core$Basics_ops['++'],
+		_elm_lang$core$Basics$toString(n),
+		'em');
+};
 var _user$project$BoardViewer$tankSymbolDef = A2(
 	_elm_lang$svg$Svg$symbol,
 	_elm_lang$core$Native_List.fromArray(
 		[
 			_elm_lang$svg$Svg_Attributes$id('tank'),
 			_elm_lang$svg$Svg_Attributes$preserveAspectRatio('xMinYMin meet'),
-			_elm_lang$svg$Svg_Attributes$width('4em'),
-			_elm_lang$svg$Svg_Attributes$height('2em'),
+			_elm_lang$svg$Svg_Attributes$width(
+			_user$project$BoardViewer$toEm(_user$project$BoardViewer$tankWidthEm)),
+			_elm_lang$svg$Svg_Attributes$height(
+			_user$project$BoardViewer$toEm(_user$project$BoardViewer$tankHeightEm)),
 			_elm_lang$svg$Svg_Attributes$viewBox('0 0 296 582')
 		]),
 	_elm_lang$core$Native_List.fromArray(
@@ -9817,79 +10193,51 @@ var _user$project$BoardViewer$tankSymbolDef = A2(
 						[]))
 				]))
 		]));
-var _user$project$BoardViewer$demo = A2(
-	_elm_lang$svg$Svg$svg,
-	_elm_lang$core$Native_List.fromArray(
-		[
-			_elm_lang$svg$Svg_Attributes$version('1.1'),
-			_elm_lang$svg$Svg_Attributes$x('0'),
-			_elm_lang$svg$Svg_Attributes$y('0'),
-			_elm_lang$svg$Svg_Attributes$width('100%'),
-			_elm_lang$svg$Svg_Attributes$height('100%'),
-			_elm_lang$svg$Svg_Attributes$viewBox('0 0 600 300')
-		]),
-	_elm_lang$core$Native_List.fromArray(
-		[
-			A2(
-			_elm_lang$svg$Svg$defs,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					A2(
-					_elm_lang$svg$Svg$circle,
-					_elm_lang$core$Native_List.fromArray(
-						[
-							_elm_lang$svg$Svg_Attributes$id('cc'),
-							_elm_lang$svg$Svg_Attributes$cx('60'),
-							_elm_lang$svg$Svg_Attributes$cy('60'),
-							_elm_lang$svg$Svg_Attributes$r('50'),
-							_elm_lang$svg$Svg_Attributes$fill('red')
-						]),
-					_elm_lang$core$Native_List.fromArray(
-						[])),
-					A2(
-					_elm_lang$svg$Svg$circle,
-					_elm_lang$core$Native_List.fromArray(
-						[
-							_elm_lang$svg$Svg_Attributes$id('pc'),
-							_elm_lang$svg$Svg_Attributes$cx('60'),
-							_elm_lang$svg$Svg_Attributes$cy('60'),
-							_elm_lang$svg$Svg_Attributes$r('50'),
-							_elm_lang$svg$Svg_Attributes$fill('red')
-						]),
-					_elm_lang$core$Native_List.fromArray(
-						[]))
-				])),
-			_user$project$BoardViewer$tankSymbolDef,
-			_user$project$BoardViewer$missileSymbolDef,
-			A2(
-			_elm_lang$svg$Svg$text$,
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$svg$Svg_Attributes$x('60'),
-					_elm_lang$svg$Svg_Attributes$y('250'),
-					_elm_lang$svg$Svg_Attributes$fill('blue')
-				]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$svg$Svg$text('Hello World!')
-				])),
-			A2(
-			_elm_lang$svg$Svg$use,
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$svg$Svg_Attributes$xlinkHref('#missile'),
-					_elm_lang$svg$Svg_Attributes$width('4em'),
-					_elm_lang$svg$Svg_Attributes$height('2em'),
-					_elm_lang$svg$Svg_Attributes$x('50'),
-					_elm_lang$svg$Svg_Attributes$y('10'),
-					_elm_lang$svg$Svg_Attributes$stroke('green')
-				]),
-			_elm_lang$core$Native_List.fromArray(
-				[]))
-		]));
+var _user$project$BoardViewer$niceFloat = function (n) {
+	return _elm_lang$core$Basics$toString(
+		_elm_lang$core$Basics$round(n));
+};
+var _user$project$BoardViewer$normalizeUsingPeriod = F2(
+	function (period, v1) {
+		var v2 = v1 - (_elm_lang$core$Basics$toFloat(
+			_elm_lang$core$Basics$floor(v1 / period)) * period);
+		return ((_elm_lang$core$Native_Utils.cmp(v1, period) > -1) || (_elm_lang$core$Native_Utils.cmp(v1, 0.0) < 0)) ? ((_elm_lang$core$Native_Utils.cmp(v2, 0.0) < 0) ? (period + v2) : v2) : v1;
+	});
+var _user$project$BoardViewer$normalizeRad = function (rad1) {
+	return A2(_user$project$BoardViewer$normalizeUsingPeriod, 2.0 * _elm_lang$core$Basics$pi, rad1);
+};
+var _user$project$BoardViewer$normalizeDeg = function (d) {
+	return A2(_user$project$BoardViewer$normalizeUsingPeriod, 360.0, d);
+};
 var _user$project$BoardViewer$viewBoard = function (model) {
+	var drawScan = F2(
+		function (activationTime, scan) {
+			var fillColor = '#6464FF';
+			var opacity2 = _elm_lang$core$Basics$toString(1.0);
+			var opacity1 = 1.0;
+			return A2(
+				_elm_lang$svg$Svg$g,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$svg$Svg$path,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								scan.radarPath,
+								_elm_lang$svg$Svg_Attributes$fill(fillColor),
+								_elm_lang$svg$Svg_Attributes$strokeWidth('1'),
+								_elm_lang$svg$Svg_Attributes$stroke(fillColor),
+								_elm_lang$svg$Svg_Attributes$opacity(opacity2),
+								_elm_lang$svg$Svg_Attributes$fillOpacity(opacity2),
+								_elm_lang$svg$Svg_Attributes$strokeOpacity(opacity2)
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+						scan.radarDebugLine
+					]));
+		});
 	var toPx = function (n) {
 		return A2(
 			_elm_lang$core$Basics_ops['++'],
@@ -9897,29 +10245,15 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 				_elm_lang$core$Basics$truncate(n)),
 			'px');
 	};
-	var drawRobot = function (_p0) {
-		var _p1 = _p0;
-		var _p3 = _p1._1;
+	var drawRobot = function (ecr) {
+		var robotStatus = A2(
+			_elm_lang$core$Basics_ops['++'],
+			_user$project$BoardViewer$niceFloat(ecr.robot.points),
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				'/',
+				_user$project$BoardViewer$niceFloat(ecr.robot.health)));
 		var transformParams = 'scale(-1,1)';
-		var direction = _p3.robot.direction;
-		var thereIsMirror = ((_elm_lang$core$Native_Utils.cmp(direction, 0.0) > -1) && (_elm_lang$core$Native_Utils.cmp(direction, 90.0) < 1)) || (_elm_lang$core$Native_Utils.cmp(direction, 270.0) > -1);
-		var rotation = thereIsMirror ? direction : (direction - 180.0);
-		var deltaTimeToRequiredSpeed = (_p3.robot.requiredSpeed - _p3.robot.currentSpeed) / _p3.robot.acceleration;
-		var simulationTime = model.currentSimulationTime;
-		var deltaTime = simulationTime - _p1._0;
-		var _p2 = (_elm_lang$core$Native_Utils.cmp(deltaTime, deltaTimeToRequiredSpeed) > 0) ? {ctor: '_Tuple3', _0: deltaTimeToRequiredSpeed, _1: deltaTime - deltaTimeToRequiredSpeed, _2: 0.0} : {ctor: '_Tuple3', _0: deltaTime, _1: 0, _2: _p3.robot.acceleration};
-		var deltaTimeWithNormalAcceleration = _p2._0;
-		var deltaTimeWithMaxSpeed = _p2._1;
-		var currentAcceleration = _p2._2;
-		var movement1 = (_p3.robot.currentSpeed * deltaTimeWithNormalAcceleration) + ((0.5 * _p3.robot.acceleration) * (deltaTimeWithNormalAcceleration * deltaTimeWithNormalAcceleration));
-		var movement2 = _p3.robot.requiredSpeed * deltaTimeWithMaxSpeed;
-		var movement = movement1 + movement2;
-		var dx = movement * _elm_lang$core$Basics$cos(
-			_elm_lang$core$Basics$radians(_p3.robot.direction));
-		var posX = _p3.robot.posX + dx;
-		var dy = movement * _elm_lang$core$Basics$sin(
-			_elm_lang$core$Basics$radians(_p3.robot.direction));
-		var posY = _p3.robot.posY + dy;
 		return A2(
 			_elm_lang$svg$Svg$g,
 			_elm_lang$core$Native_List.fromArray(
@@ -9930,46 +10264,212 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 					_elm_lang$svg$Svg$use,
 					_elm_lang$core$Native_List.fromArray(
 						[
-							_elm_lang$svg$Svg_Attributes$fill(_p3.color),
+							_elm_lang$svg$Svg_Attributes$fill(ecr.color),
 							_elm_lang$svg$Svg_Attributes$x(
-							toPx(posX)),
+							toPx(ecr.robot.posX)),
 							_elm_lang$svg$Svg_Attributes$y(
-							toPx(posY)),
+							toPx(ecr.robot.posY)),
 							_elm_lang$svg$Svg_Attributes$xlinkHref('#tank'),
-							_elm_lang$svg$Svg_Attributes$width('4em'),
-							_elm_lang$svg$Svg_Attributes$height('2em')
+							_elm_lang$svg$Svg_Attributes$width(
+							_user$project$BoardViewer$toEm(_user$project$BoardViewer$tankWidthEm)),
+							_elm_lang$svg$Svg_Attributes$height(
+							_user$project$BoardViewer$toEm(_user$project$BoardViewer$tankHeightEm))
 						]),
 					_elm_lang$core$Native_List.fromArray(
-						[]))
-				]));
-	};
-	var drawAllRobots = A3(
-		_elm_lang$core$Dict$foldl,
-		F3(
-			function (_p4, ecr, l) {
-				return A2(
-					_elm_lang$core$Basics_ops['++'],
-					l,
+						[])),
+					A2(
+					_elm_lang$svg$Svg$text$,
 					_elm_lang$core$Native_List.fromArray(
 						[
-							drawRobot(ecr)
-						]));
+							_elm_lang$svg$Svg_Attributes$x(
+							toPx(ecr.robot.posX)),
+							_elm_lang$svg$Svg_Attributes$y(
+							toPx(ecr.robot.posY)),
+							_elm_lang$svg$Svg_Attributes$fill('black')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_elm_lang$svg$Svg$tspan,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg_Attributes$dy(
+									_user$project$BoardViewer$toEm(_user$project$BoardViewer$tankHeightEm + 0.5))
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg$text(
+									A2(
+										_elm_lang$core$Basics_ops['++'],
+										ecr.name,
+										A2(_elm_lang$core$Basics_ops['++'], ': ', robotStatus)))
+								]))
+						]))
+				]));
+	};
+	var drawMissile = F2(
+		function (activationTime, missile) {
+			return A2(
+				_elm_lang$svg$Svg$use,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$svg$Svg_Attributes$fill(missile.color),
+						_elm_lang$svg$Svg_Attributes$stroke('black'),
+						_elm_lang$svg$Svg_Attributes$xlinkHref('#missile'),
+						_elm_lang$svg$Svg_Attributes$x(
+						toPx(missile.posX)),
+						_elm_lang$svg$Svg_Attributes$y(
+						toPx(missile.posY)),
+						_elm_lang$svg$Svg_Attributes$width(
+						_user$project$BoardViewer$toEm(_user$project$BoardViewer$missileWidthEm)),
+						_elm_lang$svg$Svg_Attributes$height(
+						_user$project$BoardViewer$toEm(_user$project$BoardViewer$missileHeightEm)),
+						_elm_lang$svg$Svg_Attributes$transform(
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							'rotate(',
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								_elm_lang$core$Basics$toString(
+									_user$project$BoardViewer$normalizeDeg(missile.directionDeg - 180.0)),
+								A2(
+									_elm_lang$core$Basics_ops['++'],
+									',',
+									A2(
+										_elm_lang$core$Basics_ops['++'],
+										_elm_lang$core$Basics$toString(missile.posX + (_user$project$BoardViewer$missileWidthPx / 2.0)),
+										A2(
+											_elm_lang$core$Basics_ops['++'],
+											',',
+											A2(
+												_elm_lang$core$Basics_ops['++'],
+												_elm_lang$core$Basics$toString(missile.posY + (_user$project$BoardViewer$missileHeightPx / 2.0)),
+												')')))))))
+					]),
+				_elm_lang$core$Native_List.fromArray(
+					[]));
+		});
+	var currentTime = model.currentSimulationTime;
+	var drawTrack = F2(
+		function (activationTime, e) {
+			var opacity = A2(_elm_lang$core$Basics$max, 0.0, 1.0 - ((currentTime - activationTime) / (e.deactivationTime - activationTime)));
+			return A2(
+				_elm_lang$svg$Svg$line,
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					e.lineCords,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$svg$Svg_Attributes$strokeOpacity(
+							_elm_lang$core$Basics$toString(opacity))
+						])),
+				_elm_lang$core$Native_List.fromArray(
+					[]));
+		});
+	var drawExplosion = F2(
+		function (activationTime, e) {
+			var opacity = A2(_elm_lang$core$Basics$max, 0.0, 1.0 - ((currentTime - activationTime) / (e.deactivationTime - activationTime)));
+			return A2(
+				_elm_lang$svg$Svg$circle,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$svg$Svg_Attributes$cx(
+						_elm_lang$core$Basics$toString(e.centerX)),
+						_elm_lang$svg$Svg_Attributes$cy(
+						_elm_lang$core$Basics$toString(e.centerY)),
+						_elm_lang$svg$Svg_Attributes$r(
+						_elm_lang$core$Basics$toString(45.0)),
+						_elm_lang$svg$Svg_Attributes$fill(
+						A2(_user$project$BoardViewer$model_fromColorToExplosionGradientId, model, e.color)),
+						_elm_lang$svg$Svg_Attributes$fillOpacity(
+						_elm_lang$core$Basics$toString(opacity))
+					]),
+				_elm_lang$core$Native_List.fromArray(
+					[]));
+		});
+	var drawLostPoints = F2(
+		function (activationTime, e) {
+			var speed = 8.0;
+			var deltaTime = currentTime - activationTime;
+			var posX = e.startX + ((deltaTime * speed) * _elm_lang$core$Basics$cos(
+				_elm_lang$core$Basics$degrees(e.direction)));
+			var posY = e.startY + ((deltaTime * speed) * _elm_lang$core$Basics$sin(
+				_elm_lang$core$Basics$degrees(e.direction)));
+			var opacity = A2(_elm_lang$core$Basics$max, 0.0, 1.0 - ((currentTime - activationTime) / (e.deactivationTime - activationTime)));
+			return A2(
+				_elm_lang$svg$Svg$text$,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$svg$Svg_Attributes$x(
+						_elm_lang$core$Basics$toString(posX)),
+						_elm_lang$svg$Svg_Attributes$y(
+						_elm_lang$core$Basics$toString(posY)),
+						_elm_lang$svg$Svg_Attributes$fill('blue')
+					]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$svg$Svg$text(e.msg)
+					]));
+		});
+	var drawActiveEvent = F2(
+		function (results1, be) {
+			var _p13 = be.event;
+			switch (_p13.ctor) {
+				case 'EDisplayMissile':
+					return A2(
+						_elm_lang$core$List_ops['::'],
+						A2(drawMissile, be.activationTime, _p13._0),
+						results1);
+				case 'EDisplayRobot':
+					return A2(
+						_elm_lang$core$List_ops['::'],
+						drawRobot(_p13._0),
+						results1);
+				case 'EDisplayScan':
+					return A2(
+						_elm_lang$core$List_ops['::'],
+						A2(drawScan, be.activationTime, _p13._0),
+						results1);
+				case 'EDisplayTrack':
+					return A2(
+						_elm_lang$core$List_ops['::'],
+						A2(drawTrack, be.activationTime, _p13._0),
+						results1);
+				case 'EDisplayExplosion':
+					return A2(
+						_elm_lang$core$List_ops['::'],
+						A2(drawExplosion, be.activationTime, _p13._0),
+						results1);
+				case 'EDisplayLostPoints':
+					return A2(
+						_elm_lang$core$List_ops['::'],
+						A2(drawLostPoints, be.activationTime, _p13._0),
+						results1);
+				default:
+					return results1;
+			}
+		});
+	var drawActiveEvents = A3(
+		_elm_lang$core$List$foldl,
+		F2(
+			function (e, l) {
+				return A2(drawActiveEvent, l, e);
 			}),
 		_elm_lang$core$Native_List.fromArray(
 			[]),
-		model.robotInfo);
+		model.activeEvents);
 	var boardInfo = function () {
-		var _p5 = model.boardInfo;
-		if (_p5.ctor === 'Just') {
-			return _p5._0;
+		var _p14 = model.boardInfo;
+		if (_p14.ctor === 'Just') {
+			return _p14._0;
 		} else {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 554, column: 12},
-					end: {line: 556, column: 63}
+					start: {line: 886, column: 13},
+					end: {line: 888, column: 63}
 				},
-				_p5)('contract not respected');
+				_p14)('contract not respected');
 		}
 	}();
 	var boardMaxX = boardInfo.maxBoardX;
@@ -9989,123 +10489,17 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 		_elm_lang$core$Native_List.fromArray(
 			[]));
 	return A2(
-		_elm_lang$core$Basics_ops['++'],
-		_elm_lang$core$Native_List.fromArray(
-			[_user$project$BoardViewer$tankSymbolDef, _user$project$BoardViewer$missileSymbolDef, drawBoardPerimeter]),
-		drawAllRobots);
-};
-var _user$project$BoardViewer$viewInfoSection = function (model) {
-	var fps = _elm_lang$core$Native_Utils.eq(model.totSeconds, 0.0) ? 0.0 : (_elm_lang$core$Basics$toFloat(model.totRedrawFrames) / model.totSeconds);
-	var viewModelDim = A2(
-		_elm_lang$html$Html$ul,
-		_elm_lang$core$Native_List.fromArray(
-			[]),
-		_elm_lang$core$Native_List.fromArray(
-			[
-				A2(
-				_elm_lang$html$Html$li,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							'simulation time: ',
-							_elm_lang$core$Basics$toString(model.currentSimulationTime)))
-					])),
-				A2(
-				_elm_lang$html$Html$li,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							'streamed boards: ',
-							_elm_lang$core$Basics$toString(
-								_elm_lang$core$Dict$size(model.streamedBoardInfo))))
-					])),
-				A2(
-				_elm_lang$html$Html$li,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							'next events: ',
-							_elm_lang$core$Basics$toString(
-								_elm_lang$core$List$length(model.nextEvents))))
-					])),
-				A2(
-				_elm_lang$html$Html$li,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							'active events: ',
-							_elm_lang$core$Basics$toString(
-								_elm_lang$core$Dict$size(model.activeEvents))))
-					])),
-				A2(
-				_elm_lang$html$Html$li,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							'FPS: ',
-							_elm_lang$core$Basics$toString(fps)))
-					]))
-			]));
-	var viewErrorMessages = A2(
-		_elm_lang$html$Html$ul,
-		_elm_lang$core$Native_List.fromArray(
-			[]),
+		_elm_lang$core$List_ops['::'],
 		A2(
-			_elm_lang$core$List$map,
-			function (msg) {
-				return A2(
-					_elm_lang$html$Html$li,
-					_elm_lang$core$Native_List.fromArray(
-						[]),
-					_elm_lang$core$Native_List.fromArray(
-						[
-							_elm_lang$html$Html$text(msg)
-						]));
-			},
-			A2(_elm_lang$core$List$take, 10, model.errorMessages)));
-	return _elm_lang$core$Native_List.fromArray(
-		[
-			A2(
-			_elm_lang$html$Html$ul,
+			_elm_lang$svg$Svg$defs,
 			_elm_lang$core$Native_List.fromArray(
 				[]),
 			A2(
-				_elm_lang$core$List$map,
-				function (_p7) {
-					var _p8 = _p7;
-					return A2(
-						_elm_lang$html$Html$li,
-						_elm_lang$core$Native_List.fromArray(
-							[]),
-						_elm_lang$core$Native_List.fromArray(
-							[
-								_elm_lang$html$Html$text(_p8._1.name)
-							]));
-				},
-				_elm_lang$core$Dict$values(model.robotInfo))),
-			viewModelDim,
-			viewErrorMessages
-		]);
+				_elm_lang$core$Basics_ops['++'],
+				_user$project$BoardViewer$colorGradientDefs(model.usedRobotColors),
+				_elm_lang$core$Native_List.fromArray(
+					[_user$project$BoardViewer$tankSymbolDef, _user$project$BoardViewer$missileSymbolDef, drawBoardPerimeter]))),
+		drawActiveEvents);
 };
 var _user$project$BoardViewer$viewContent = function (model) {
 	var containerCssStyle = _elm_lang$html$Html_Attributes$style(
@@ -10118,17 +10512,17 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				{ctor: '_Tuple2', _0: 'justify-content', _1: 'flex-start'}
 			]));
 	var boardInfo = function () {
-		var _p9 = model.boardInfo;
-		if (_p9.ctor === 'Just') {
-			return _p9._0;
+		var _p16 = model.boardInfo;
+		if (_p16.ctor === 'Just') {
+			return _p16._0;
 		} else {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 482, column: 13},
-					end: {line: 484, column: 64}
+					start: {line: 819, column: 13},
+					end: {line: 821, column: 64}
 				},
-				_p9)('contract not respected');
+				_p16)('contract not respected');
 		}
 	}();
 	var svgViewBox = A2(
@@ -10213,37 +10607,10 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				_user$project$BoardViewer$viewInfoSection(model))
 			]));
 };
-var _user$project$BoardViewer$viewStreaming = function (model) {
-	var _p11 = model.isInitializated;
-	if (_p11 === false) {
-		return A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[]));
-	} else {
-		return A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$html$Html$text(
-					A2(
-						_elm_lang$core$Basics_ops['++'],
-						'Streaming: ',
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							_elm_lang$core$Basics$toString(model.streamingLeft),
-							's')))
-				]));
-	}
-};
 var _user$project$BoardViewer$view = function (model) {
 	var isThereBoard = function () {
-		var _p12 = model.boardInfo;
-		if (_p12.ctor === 'Nothing') {
+		var _p18 = model.boardInfo;
+		if (_p18.ctor === 'Nothing') {
 			return false;
 		} else {
 			return true;
@@ -10253,242 +10620,21 @@ var _user$project$BoardViewer$view = function (model) {
 		_elm_lang$core$Native_Utils.eq(model.windowSize.width, 0));
 	return (model.simulationIsStarted && (isThereBoardSize && isThereBoard)) ? _user$project$BoardViewer$viewContent(model) : _user$project$BoardViewer$viewStreaming(model);
 };
-var _user$project$BoardViewer$model_deactivateEvent = F2(
-	function (m, i) {
-		return _elm_lang$core$Native_Utils.update(
-			m,
-			{
-				activeEvents: A2(_elm_lang$core$Dict$remove, i, m.activeEvents)
-			});
+var _user$project$BoardViewer$polarToCartesian = F4(
+	function (centerX, centerY, radius, angleInRadians) {
+		var _p19 = _elm_lang$core$Basics$fromPolar(
+			{ctor: '_Tuple2', _0: radius, _1: angleInRadians});
+		var x = _p19._0;
+		var y = _p19._1;
+		return {ctor: '_Tuple2', _0: x + centerX, _1: y + centerY};
 	});
-var _user$project$BoardViewer$model_applyEvent = F2(
-	function (m1, be) {
-		var addActiveEvent = function (m1) {
-			var nextId = (_elm_lang$core$Native_Utils.cmp(m1.nextEventId, 100000) > 0) ? 0 : (m1.nextEventId + 1);
-			return _elm_lang$core$Native_Utils.update(
-				m1,
-				{
-					nextEventId: nextId,
-					activeEvents: A3(_elm_lang$core$Dict$insert, nextId, be, m1.activeEvents)
-				});
-		};
-		var robotInfo = function (robotId) {
-			var _p13 = A2(_elm_lang$core$Dict$get, robotId, m1.robotInfo);
-			if (_p13.ctor === 'Nothing') {
-				return _elm_lang$core$Native_Utils.crashCase(
-					'BoardViewer',
-					{
-						start: {line: 375, column: 13},
-						end: {line: 377, column: 28}
-					},
-					_p13)('impossible');
-			} else {
-				return _p13._0;
-			}
-		};
-		var updateRobot = F2(
-			function (m, r) {
-				var _p15 = robotInfo(r.robotId);
-				var ri = _p15._1;
-				return _elm_lang$core$Native_Utils.update(
-					m,
-					{
-						robotInfo: A3(
-							_elm_lang$core$Dict$insert,
-							r.robotId,
-							{
-								ctor: '_Tuple2',
-								_0: be.activationTime,
-								_1: _elm_lang$core$Native_Utils.update(
-									ri,
-									{robot: r})
-							},
-							m1.robotInfo)
-					});
-			});
-		var _p16 = be.event;
-		switch (_p16.ctor) {
-			case 'ECreateRobot':
-				var _p17 = _p16._0;
-				return _elm_lang$core$Native_Utils.update(
-					m1,
-					{
-						robotInfo: A3(
-							_elm_lang$core$Dict$insert,
-							_p17.robot.robotId,
-							{ctor: '_Tuple2', _0: be.activationTime, _1: _p17},
-							m1.robotInfo)
-					});
-			case 'ERemoveRobot':
-				return _elm_lang$core$Native_Utils.update(
-					m1,
-					{
-						robotInfo: A2(_elm_lang$core$Dict$remove, _p16._0.robot.robotId, m1.robotInfo)
-					});
-			case 'EDrive':
-				return A2(updateRobot, m1, _p16._0.robot);
-			case 'EScan':
-				return addActiveEvent(
-					A2(updateRobot, m1, _p16._0.robot));
-			case 'EMissile':
-				return addActiveEvent(
-					A2(updateRobot, m1, _p16._0.robot));
-			case 'EExplosion':
-				var _p19 = _p16._0;
-				var m2 = A2(updateRobot, m1, _p19.robot);
-				var m3 = function () {
-					var _p18 = _p19.hitRobot;
-					if (_p18.ctor === 'Just') {
-						return A2(updateRobot, m2, _p18._0);
-					} else {
-						return m2;
-					}
-				}();
-				return addActiveEvent(m3);
-			default:
-				return addActiveEvent(
-					A2(updateRobot, m1, _p16._0.robot));
-		}
-	});
-var _user$project$BoardViewer$model_addStream = F2(
-	function (m, bi) {
-		return _elm_lang$core$Native_Utils.update(
-			m,
-			{
-				streamedBoardInfo: A3(_elm_lang$core$Dict$insert, bi.startTime, bi, m.streamedBoardInfo),
-				simulationIsStarted: m.simulationIsStarted || (_elm_lang$core$Native_Utils.cmp(
-					_elm_lang$core$Dict$size(m.streamedBoardInfo),
-					1) > -1)
-			});
-	});
-var _user$project$BoardViewer$model_init = F2(
-	function (m, bi) {
-		var initRobot = F2(
-			function (e, d) {
-				var _p20 = e.event;
-				if (_p20.ctor === 'ECreateRobot') {
-					var _p21 = _p20._0;
-					return A3(
-						_elm_lang$core$Dict$insert,
-						_p21.robot.robotId,
-						{ctor: '_Tuple2', _0: e.activationTime, _1: _p21},
-						d);
-				} else {
-					return d;
-				}
-			});
-		return _elm_lang$core$Native_Utils.update(
-			m,
-			{
-				isInitializated: true,
-				streamingLeft: bi.streamDelay * 2,
-				robotInfo: A3(_elm_lang$core$List$foldl, initRobot, m.robotInfo, bi.events),
-				boardInfo: _elm_lang$core$Maybe$Just(bi),
-				currentSimulationTime: bi.startTime
-			});
-	});
-var _user$project$BoardViewer$cmd_make = function (msg) {
-	return A3(
-		_elm_lang$core$Task$perform,
-		_elm_lang$core$Basics$identity,
-		_elm_lang$core$Basics$identity,
-		_elm_lang$core$Task$succeed(msg));
-};
-var _user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime = F2(
-	function (bi, s) {
-		return (bi.turnDeltaTime / bi.networkLatency) * s;
-	});
-var _user$project$BoardViewer$model_advance = F2(
-	function (m1, realTimeSeconds) {
-		model_advance:
-		while (true) {
-			var _p22 = m1.boardInfo;
-			if (_p22.ctor === 'Nothing') {
-				var _p23 = _elm_lang$core$List$head(
-					_elm_lang$core$Dict$keys(m1.streamedBoardInfo));
-				if (_p23.ctor === 'Nothing') {
-					return m1;
-				} else {
-					var _p26 = _p23._0;
-					var _p24 = A2(_elm_lang$core$Dict$get, _p26, m1.streamedBoardInfo);
-					if (_p24.ctor === 'Nothing') {
-						return m1;
-					} else {
-						var _p25 = _p24._0;
-						var _v13 = _elm_lang$core$Native_Utils.update(
-							m1,
-							{
-								boardInfo: _elm_lang$core$Maybe$Just(_p25),
-								streamedBoardInfo: A2(_elm_lang$core$Dict$remove, _p26, m1.streamedBoardInfo),
-								nextEvents: _p25.events
-							}),
-							_v14 = realTimeSeconds;
-						m1 = _v13;
-						realTimeSeconds = _v14;
-						continue model_advance;
-					}
-				}
-			} else {
-				var _p33 = _p22._0;
-				var model_processNextEvents = function (m1) {
-					model_processNextEvents:
-					while (true) {
-						var _p27 = _elm_lang$core$List$head(m1.nextEvents);
-						if (_p27.ctor === 'Nothing') {
-							var _p28 = _elm_lang$core$Native_Utils.cmp(m1.currentSimulationTime, _p33.endTime) > 0;
-							if (_p28 === true) {
-								return A2(_user$project$BoardViewer$model_advance, m1, 0.0);
-							} else {
-								return m1;
-							}
-						} else {
-							var _p31 = _p27._0;
-							var _p29 = _elm_lang$core$Native_Utils.cmp(_p31.activationTime, m1.currentSimulationTime) < 1;
-							if (_p29 === false) {
-								return m1;
-							} else {
-								var m2 = _elm_lang$core$Native_Utils.update(
-									m1,
-									{
-										nextEvents: function () {
-											var _p30 = _elm_lang$core$List$tail(m1.nextEvents);
-											if (_p30.ctor === 'Nothing') {
-												return _elm_lang$core$Native_List.fromArray(
-													[]);
-											} else {
-												return _p30._0;
-											}
-										}()
-									});
-								var m3 = A2(_user$project$BoardViewer$model_applyEvent, m2, _p31);
-								var _v19 = m3;
-								m1 = _v19;
-								continue model_processNextEvents;
-							}
-						}
-					}
-				};
-				var newSeconds = m1.totSeconds + realTimeSeconds;
-				var newTotFrames = m1.totRedrawFrames + 1;
-				var deltaTime = A2(_user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime, _p33, realTimeSeconds);
-				var newSimulationTime = m1.currentSimulationTime + deltaTime;
-				var _p32 = _elm_lang$core$List$isEmpty(m1.nextEvents) && (_elm_lang$core$Native_Utils.cmp(_p33.endTime, newSimulationTime) < 0);
-				if (_p32 === true) {
-					var _v21 = _elm_lang$core$Native_Utils.update(
-						m1,
-						{boardInfo: _elm_lang$core$Maybe$Nothing}),
-						_v22 = realTimeSeconds;
-					m1 = _v21;
-					realTimeSeconds = _v22;
-					continue model_advance;
-				} else {
-					return model_processNextEvents(
-						_elm_lang$core$Native_Utils.update(
-							m1,
-							{currentSimulationTime: newSimulationTime, totRedrawFrames: newTotFrames, totSeconds: newSeconds}));
-				}
-			}
-		}
+var _user$project$BoardViewer$distanceXYXY = F4(
+	function (x1, y1, x2, y2) {
+		var dy = y2 - y1;
+		var ddy = Math.pow(dy, 2.0);
+		var dx = x2 - x1;
+		var ddx = Math.pow(dx, 2.0);
+		return _elm_lang$core$Basics$sqrt(ddx + ddy);
 	});
 var _user$project$BoardViewer$valueOr0 = function (x) {
 	return (_elm_lang$core$Native_Utils.cmp(x, 0) < 0) ? 0 : x;
@@ -10497,28 +10643,51 @@ var _user$project$BoardViewer$BoardInfo = F8(
 	function (a, b, c, d, e, f, g, h) {
 		return {maxBoardX: a, maxBoardY: b, streamDelay: c, turnDeltaTime: d, networkLatency: e, startTime: f, endTime: g, events: h};
 	});
-var _user$project$BoardViewer$RobotInfo = F9(
-	function (a, b, c, d, e, f, g, h, i) {
-		return {robotId: a, posX: b, posY: c, direction: d, currentSpeed: e, requiredSpeed: f, acceleration: g, reloadingTime: h, health: i};
-	});
+var _user$project$BoardViewer$RobotInfo = function (a) {
+	return function (b) {
+		return function (c) {
+			return function (d) {
+				return function (e) {
+					return function (f) {
+						return function (g) {
+							return function (h) {
+								return function (i) {
+									return function (j) {
+										return {robotId: a, posX: b, posY: c, direction: d, currentSpeed: e, requiredSpeed: f, acceleration: g, reloadingTime: h, health: i, points: j};
+									};
+								};
+							};
+						};
+					};
+				};
+			};
+		};
+	};
+};
 var _user$project$BoardViewer$robotInfoDecoder = function () {
-	var o8 = function (robotId) {
-		return A9(
-			_elm_lang$core$Json_Decode$object8,
-			_user$project$BoardViewer$RobotInfo(robotId),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'posX', _elm_lang$core$Json_Decode$float),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'posY', _elm_lang$core$Json_Decode$float),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'direction', _elm_lang$core$Json_Decode$float),
+	var part2 = function (_p20) {
+		var _p21 = _p20;
+		return A7(
+			_elm_lang$core$Json_Decode$object6,
+			A4(_user$project$BoardViewer$RobotInfo, _p21._0, _p21._1, _p21._2, _p21._3),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'currentSpeed', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'requiredSpeed', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'acceleration', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'reloadingTime', _elm_lang$core$Json_Decode$float),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'health', _elm_lang$core$Json_Decode$float));
+			A2(_elm_lang$core$Json_Decode_ops[':='], 'health', _elm_lang$core$Json_Decode$float),
+			A2(_elm_lang$core$Json_Decode_ops[':='], 'points', _elm_lang$core$Json_Decode$float));
 	};
-	return A2(
-		_elm_lang$core$Json_Decode$andThen,
+	var part1 = A5(
+		_elm_lang$core$Json_Decode$object4,
+		F4(
+			function (v0, v1, v2, v3) {
+				return {ctor: '_Tuple4', _0: v0, _1: v1, _2: v2, _3: v3};
+			}),
 		A2(_elm_lang$core$Json_Decode_ops[':='], 'robotId', _elm_lang$core$Json_Decode$int),
-		o8);
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'posX', _elm_lang$core$Json_Decode$float),
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'posY', _elm_lang$core$Json_Decode$float),
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'direction', _elm_lang$core$Json_Decode$float));
+	return A2(_elm_lang$core$Json_Decode$andThen, part1, part2);
 }();
 var _user$project$BoardViewer$BoardEvent = F2(
 	function (a, b) {
@@ -10541,6 +10710,10 @@ var _user$project$BoardViewer$eventRemoveRobotDecoder = A2(
 	_elm_lang$core$Json_Decode$object1,
 	_user$project$BoardViewer$EventRemoveRobot,
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'robot', _user$project$BoardViewer$robotInfoDecoder));
+var _user$project$BoardViewer$ActiveTrack = F2(
+	function (a, b) {
+		return {deactivationTime: a, lineCords: b};
+	});
 var _user$project$BoardViewer$EventScan = F5(
 	function (a, b, c, d, e) {
 		return {direction: a, semiaperture: b, scanMaxDistance: c, robot: d, hitRobot: e};
@@ -10554,6 +10727,10 @@ var _user$project$BoardViewer$eventScanDecoder = A6(
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'robot', _user$project$BoardViewer$robotInfoDecoder),
 	_elm_lang$core$Json_Decode$maybe(
 		A2(_elm_lang$core$Json_Decode_ops[':='], 'hitRobot', _user$project$BoardViewer$robotInfoDecoder)));
+var _user$project$BoardViewer$ActiveScan = F3(
+	function (a, b, c) {
+		return {hitRobot: a, radarPath: b, radarDebugLine: c};
+	});
 var _user$project$BoardViewer$EventMissile = F4(
 	function (a, b, c, d) {
 		return {robot: a, direction: b, distance: c, speed: d};
@@ -10565,6 +10742,18 @@ var _user$project$BoardViewer$eventMissileDecoder = A5(
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'direction', _elm_lang$core$Json_Decode$float),
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'distance', _elm_lang$core$Json_Decode$float),
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'speed', _elm_lang$core$Json_Decode$float));
+var _user$project$BoardViewer$ActiveMissile = F8(
+	function (a, b, c, d, e, f, g, h) {
+		return {missile: a, posX: b, posY: c, targetX: d, targetY: e, color: f, directionDeg: g, deactivationTime: h};
+	});
+var _user$project$BoardViewer$ActiveExplosion = F4(
+	function (a, b, c, d) {
+		return {deactivationTime: a, centerX: b, centerY: c, color: d};
+	});
+var _user$project$BoardViewer$ActiveLostPoints = F5(
+	function (a, b, c, d, e) {
+		return {deactivationTime: a, direction: b, startX: c, startY: d, msg: e};
+	});
 var _user$project$BoardViewer$EventExplosion = F3(
 	function (a, b, c) {
 		return {robot: a, hitRobot: b, damage: c};
@@ -10573,8 +10762,7 @@ var _user$project$BoardViewer$eventExplosionDecoder = A4(
 	_elm_lang$core$Json_Decode$object3,
 	_user$project$BoardViewer$EventExplosion,
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'robot', _user$project$BoardViewer$robotInfoDecoder),
-	_elm_lang$core$Json_Decode$maybe(
-		A2(_elm_lang$core$Json_Decode_ops[':='], 'hitRobot', _user$project$BoardViewer$robotInfoDecoder)),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'hitRobot', _user$project$BoardViewer$robotInfoDecoder),
 	A2(_elm_lang$core$Json_Decode_ops[':='], 'damage', _elm_lang$core$Json_Decode$float));
 var _user$project$BoardViewer$EventRobotCollision = function (a) {
 	return {robot: a};
@@ -10604,7 +10792,7 @@ var _user$project$BoardViewer$Model = function (a) {
 											return function (l) {
 												return function (m) {
 													return function (n) {
-														return {isInitializated: a, windowSize: b, streamingLeft: c, simulationIsStarted: d, boardInfo: e, streamedBoardInfo: f, nextEvents: g, robotInfo: h, activeEvents: i, nextEventId: j, currentSimulationTime: k, errorMessages: l, totRedrawFrames: m, totSeconds: n};
+														return {isInitializated: a, windowSize: b, streamingLeft: c, simulationIsStarted: d, boardInfo: e, streamedBoardInfo: f, nextEvents: g, activeEvents: h, robotInfo: i, usedRobotColors: j, currentSimulationTime: k, errorMessages: l, totRedrawFrames: m, totSeconds: n};
 													};
 												};
 											};
@@ -10619,6 +10807,603 @@ var _user$project$BoardViewer$Model = function (a) {
 		};
 	};
 };
+var _user$project$BoardViewer$EDisplayLostPoints = function (a) {
+	return {ctor: 'EDisplayLostPoints', _0: a};
+};
+var _user$project$BoardViewer$EDisplayTrack = function (a) {
+	return {ctor: 'EDisplayTrack', _0: a};
+};
+var _user$project$BoardViewer$EDisplayScan = function (a) {
+	return {ctor: 'EDisplayScan', _0: a};
+};
+var _user$project$BoardViewer$EDisplayExplosion = function (a) {
+	return {ctor: 'EDisplayExplosion', _0: a};
+};
+var _user$project$BoardViewer$EDisplayMissile = function (a) {
+	return {ctor: 'EDisplayMissile', _0: a};
+};
+var _user$project$BoardViewer$model_processEvent = F2(
+	function (m1, be) {
+		var initActiveScan = function (scan) {
+			var semiapertureRad = A2(
+				_elm_lang$core$Basics$min,
+				_elm_lang$core$Basics$pi,
+				_user$project$BoardViewer$normalizeRad(
+					_elm_lang$core$Basics$degrees(scan.semiaperture)));
+			var largeArcFlag = (_elm_lang$core$Native_Utils.cmp(semiapertureRad, _elm_lang$core$Basics$pi / 2.0) > 0) ? '1' : '0';
+			var directionRad = _user$project$BoardViewer$normalizeRad(
+				_elm_lang$core$Basics$degrees(scan.direction));
+			var _p22 = {
+				ctor: '_Tuple2',
+				_0: _user$project$BoardViewer$normalizeRad(directionRad - semiapertureRad),
+				_1: _user$project$BoardViewer$normalizeRad(directionRad + semiapertureRad)
+			};
+			var startAngleRad = _p22._0;
+			var endAngleRad = _p22._1;
+			var centerY = scan.robot.posY;
+			var centerX = scan.robot.posX;
+			var _p23 = function () {
+				var _p24 = scan.hitRobot;
+				if (_p24.ctor === 'Nothing') {
+					return {
+						ctor: '_Tuple4',
+						_0: false,
+						_1: scan.scanMaxDistance,
+						_2: centerX + (scan.scanMaxDistance * _elm_lang$core$Basics$cos(directionRad)),
+						_3: centerY + (scan.scanMaxDistance * _elm_lang$core$Basics$sin(directionRad))
+					};
+				} else {
+					var _p25 = _p24._0;
+					return {
+						ctor: '_Tuple4',
+						_0: true,
+						_1: A4(_user$project$BoardViewer$distanceXYXY, centerX, centerY, _p25.posX, _p25.posY),
+						_2: _p25.posX,
+						_3: _p25.posY
+					};
+				}
+			}();
+			var hasRecognizedSomething = _p23._0;
+			var distance = _p23._1;
+			var targetX = _p23._2;
+			var targetY = _p23._3;
+			var isLimitCase = _elm_lang$core$Native_Utils.cmp(distance, 0.1) < 1;
+			var targetLineColor = hasRecognizedSomething ? 'red' : 'blue';
+			var _p26 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, startAngleRad);
+			var startX = _p26._0;
+			var startY = _p26._1;
+			var _p27 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, endAngleRad);
+			var endX = _p27._0;
+			var endY = _p27._1;
+			var _p28 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, directionRad);
+			var directionX = _p28._0;
+			var directionY = _p28._1;
+			var radarPath = _elm_lang$svg$Svg_Attributes$d(
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					'M ',
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						_elm_lang$core$Basics$toString(centerX),
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							' ',
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								_elm_lang$core$Basics$toString(centerY),
+								A2(
+									_elm_lang$core$Basics_ops['++'],
+									' L ',
+									A2(
+										_elm_lang$core$Basics_ops['++'],
+										_elm_lang$core$Basics$toString(startX),
+										A2(
+											_elm_lang$core$Basics_ops['++'],
+											' ',
+											A2(
+												_elm_lang$core$Basics_ops['++'],
+												_elm_lang$core$Basics$toString(startY),
+												A2(
+													_elm_lang$core$Basics_ops['++'],
+													' A ',
+													A2(
+														_elm_lang$core$Basics_ops['++'],
+														_elm_lang$core$Basics$toString(distance),
+														A2(
+															_elm_lang$core$Basics_ops['++'],
+															' ',
+															A2(
+																_elm_lang$core$Basics_ops['++'],
+																_elm_lang$core$Basics$toString(distance),
+																A2(
+																	_elm_lang$core$Basics_ops['++'],
+																	' 0 ',
+																	A2(
+																		_elm_lang$core$Basics_ops['++'],
+																		largeArcFlag,
+																		A2(
+																			_elm_lang$core$Basics_ops['++'],
+																			' 1 ',
+																			A2(
+																				_elm_lang$core$Basics_ops['++'],
+																				_elm_lang$core$Basics$toString(endX),
+																				A2(
+																					_elm_lang$core$Basics_ops['++'],
+																					' ',
+																					A2(
+																						_elm_lang$core$Basics_ops['++'],
+																						_elm_lang$core$Basics$toString(endY),
+																						A2(
+																							_elm_lang$core$Basics_ops['++'],
+																							' L ',
+																							A2(
+																								_elm_lang$core$Basics_ops['++'],
+																								_elm_lang$core$Basics$toString(centerX),
+																								A2(
+																									_elm_lang$core$Basics_ops['++'],
+																									' ',
+																									A2(
+																										_elm_lang$core$Basics_ops['++'],
+																										_elm_lang$core$Basics$toString(centerY),
+																										' Z')))))))))))))))))))))));
+			var radarDebugLine = A2(
+				_elm_lang$svg$Svg$g,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$svg$Svg$line,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$svg$Svg_Attributes$x1(
+								_elm_lang$core$Basics$toString(centerX)),
+								_elm_lang$svg$Svg_Attributes$y1(
+								_elm_lang$core$Basics$toString(centerY)),
+								_elm_lang$svg$Svg_Attributes$x2(
+								_elm_lang$core$Basics$toString(targetX)),
+								_elm_lang$svg$Svg_Attributes$y2(
+								_elm_lang$core$Basics$toString(targetY)),
+								_elm_lang$svg$Svg_Attributes$stroke(targetLineColor)
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+						A2(
+						_elm_lang$svg$Svg$line,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$svg$Svg_Attributes$x1(
+								_elm_lang$core$Basics$toString(centerX)),
+								_elm_lang$svg$Svg_Attributes$y1(
+								_elm_lang$core$Basics$toString(centerY)),
+								_elm_lang$svg$Svg_Attributes$x2(
+								_elm_lang$core$Basics$toString(directionX)),
+								_elm_lang$svg$Svg_Attributes$y2(
+								_elm_lang$core$Basics$toString(directionY)),
+								_elm_lang$svg$Svg_Attributes$stroke('blue')
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[]))
+					]));
+			return {
+				hitRobot: hasRecognizedSomething,
+				radarPath: isLimitCase ? _elm_lang$svg$Svg_Attributes$d('') : radarPath,
+				radarDebugLine: isLimitCase ? A2(
+					_elm_lang$svg$Svg$g,
+					_elm_lang$core$Native_List.fromArray(
+						[]),
+					_elm_lang$core$Native_List.fromArray(
+						[])) : radarDebugLine
+			};
+		};
+		var addActiveBoardEvent = F2(
+			function (m1, be) {
+				return _elm_lang$core$Native_Utils.update(
+					m1,
+					{
+						activeEvents: A2(_elm_lang$core$List_ops['::'], be, m1.activeEvents)
+					});
+			});
+		var addActiveEvent = F2(
+			function (m1, e) {
+				return A2(
+					addActiveBoardEvent,
+					m1,
+					_elm_lang$core$Native_Utils.update(
+						be,
+						{event: e}));
+			});
+		var robotInfo = function (robotId) {
+			var _p29 = A2(_elm_lang$core$Dict$get, robotId, m1.robotInfo);
+			if (_p29.ctor === 'Nothing') {
+				return _elm_lang$core$Native_Utils.crashCase(
+					'BoardViewer',
+					{
+						start: {line: 515, column: 13},
+						end: {line: 517, column: 28}
+					},
+					_p29)('impossible');
+			} else {
+				return _p29._0;
+			}
+		};
+		var updateRobot = F2(
+			function (m, r) {
+				var _p31 = robotInfo(r.robotId);
+				var ri = _p31._1;
+				return _elm_lang$core$Native_Utils.update(
+					m,
+					{
+						robotInfo: A3(
+							_elm_lang$core$Dict$insert,
+							r.robotId,
+							{
+								ctor: '_Tuple2',
+								_0: be.activationTime,
+								_1: _elm_lang$core$Native_Utils.update(
+									ri,
+									{robot: r})
+							},
+							m1.robotInfo)
+					});
+			});
+		var updateMaybeRobot = F2(
+			function (m, mr) {
+				var _p32 = mr;
+				if (_p32.ctor === 'Just') {
+					return A2(updateRobot, m, _p32._0);
+				} else {
+					return m;
+				}
+			});
+		var activationTime = be.activationTime;
+		var currentTime = m1.currentSimulationTime;
+		var initActiveMissile = function (missile) {
+			var sinY = _elm_lang$core$Basics$sin(
+				_elm_lang$core$Basics$degrees(missile.direction));
+			var targetY = missile.robot.posY + (missile.distance * sinY);
+			var cosX = _elm_lang$core$Basics$cos(
+				_elm_lang$core$Basics$degrees(missile.direction));
+			var targetX = missile.robot.posX + (missile.distance * cosX);
+			var speed = missile.speed;
+			var timeToTarget = missile.distance / speed;
+			var deactivationTime = activationTime + timeToTarget;
+			var deltaTime = currentTime - activationTime;
+			var movement = speed * deltaTime;
+			var dx = movement * cosX;
+			var posX = missile.robot.posX + dx;
+			var dy = movement * sinY;
+			var posY = missile.robot.posY + dy;
+			return {
+				missile: missile,
+				posX: posX,
+				posY: posY,
+				targetX: targetX,
+				targetY: targetY,
+				directionDeg: missile.direction,
+				color: A2(_user$project$BoardViewer$model_robotColor, m1, missile.robot.robotId),
+				deactivationTime: deactivationTime
+			};
+		};
+		var updateActiveMissile = function (missile) {
+			return initActiveMissile(missile.missile);
+		};
+		var initActiveExplosion = function (missile) {
+			return {deactivationTime: currentTime + 2.0, centerX: missile.targetX, centerY: missile.targetY, color: missile.color};
+		};
+		var initActiveLostPoints = function (e) {
+			var msg = A2(
+				_elm_lang$core$Basics_ops['++'],
+				'-',
+				_user$project$BoardViewer$niceFloat(e.damage));
+			return {
+				deactivationTime: currentTime + 5.0,
+				startX: e.hitRobot.posX,
+				startY: e.hitRobot.posY,
+				direction: _user$project$BoardViewer$normalizeDeg(e.hitRobot.direction + 180.0),
+				msg: msg
+			};
+		};
+		var _p33 = be.event;
+		switch (_p33.ctor) {
+			case 'ECreateRobot':
+				var _p34 = _p33._0;
+				return _elm_lang$core$Native_Utils.update(
+					m1,
+					{
+						robotInfo: A3(
+							_elm_lang$core$Dict$insert,
+							_p34.robot.robotId,
+							{ctor: '_Tuple2', _0: be.activationTime, _1: _p34},
+							m1.robotInfo),
+						usedRobotColors: A3(
+							_elm_lang$core$Dict$insert,
+							_p34.color,
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								'id_',
+								_elm_lang$core$Basics$toString(
+									_elm_lang$core$List$length(
+										_elm_lang$core$Dict$keys(m1.usedRobotColors)))),
+							m1.usedRobotColors)
+					});
+			case 'ERemoveRobot':
+				return _elm_lang$core$Native_Utils.update(
+					m1,
+					{
+						robotInfo: A2(_elm_lang$core$Dict$remove, _p33._0.robot.robotId, m1.robotInfo)
+					});
+			case 'EDrive':
+				return A2(updateRobot, m1, _p33._0.robot);
+			case 'EScan':
+				var _p35 = _p33._0;
+				return A2(
+					addActiveEvent,
+					A2(
+						updateMaybeRobot,
+						A2(updateRobot, m1, _p35.robot),
+						_p35.hitRobot),
+					_user$project$BoardViewer$EDisplayScan(
+						initActiveScan(_p35)));
+			case 'EDisplayScan':
+				return m1;
+			case 'EMissile':
+				var _p36 = _p33._0;
+				return A2(
+					addActiveEvent,
+					A2(updateRobot, m1, _p36.robot),
+					_user$project$BoardViewer$EDisplayMissile(
+						initActiveMissile(_p36)));
+			case 'EDisplayMissile':
+				var _p37 = _p33._0;
+				return (_elm_lang$core$Native_Utils.cmp(_p37.deactivationTime, currentTime) < 1) ? A2(
+					addActiveEvent,
+					m1,
+					_user$project$BoardViewer$EDisplayExplosion(
+						initActiveExplosion(_p37))) : A2(
+					addActiveEvent,
+					m1,
+					_user$project$BoardViewer$EDisplayMissile(
+						updateActiveMissile(_p37)));
+			case 'EDisplayExplosion':
+				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+			case 'EDisplayTrack':
+				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+			case 'EDisplayLostPoints':
+				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+			case 'EExplosion':
+				var _p38 = _p33._0;
+				var m2 = A2(updateRobot, m1, _p38.robot);
+				var m3 = A2(updateRobot, m2, _p38.hitRobot);
+				var m4 = A2(
+					addActiveEvent,
+					m3,
+					_user$project$BoardViewer$EDisplayLostPoints(
+						initActiveLostPoints(_p38)));
+				return m4;
+			case 'ERobotCollision':
+				return A2(updateRobot, m1, _p33._0.robot);
+			default:
+				return m1;
+		}
+	});
+var _user$project$BoardViewer$model_init = F2(
+	function (m1, bi) {
+		var m2 = _elm_lang$core$Native_Utils.update(
+			m1,
+			{
+				isInitializated: true,
+				streamingLeft: bi.streamDelay * 2,
+				boardInfo: _elm_lang$core$Maybe$Just(bi),
+				currentSimulationTime: bi.startTime
+			});
+		var initRobot = F2(
+			function (e, m) {
+				var _p39 = e.event;
+				if (_p39.ctor === 'ECreateRobot') {
+					return A2(_user$project$BoardViewer$model_processEvent, m, e);
+				} else {
+					return m;
+				}
+			});
+		return A3(_elm_lang$core$List$foldl, initRobot, m2, bi.events);
+	});
+var _user$project$BoardViewer$model_processActiveEvents = function (m1) {
+	var m0 = _elm_lang$core$Native_Utils.update(
+		m1,
+		{
+			activeEvents: _elm_lang$core$Native_List.fromArray(
+				[])
+		});
+	return A3(
+		_elm_lang$core$List$foldl,
+		F2(
+			function (e, m) {
+				return A2(_user$project$BoardViewer$model_processEvent, m, e);
+			}),
+		m0,
+		m1.activeEvents);
+};
+var _user$project$BoardViewer$model_processNextEvents = function (m1) {
+	model_processNextEvents:
+	while (true) {
+		var _p40 = m1.boardInfo;
+		if (_p40.ctor === 'Nothing') {
+			return m1;
+		} else {
+			var _p41 = _elm_lang$core$List$head(m1.nextEvents);
+			if (_p41.ctor === 'Nothing') {
+				var _p42 = _elm_lang$core$Native_Utils.cmp(m1.currentSimulationTime, _p40._0.endTime) > 0;
+				if (_p42 === true) {
+					var _p43 = _user$project$BoardViewer$model_loadStreamedData(
+						_elm_lang$core$Native_Utils.update(
+							m1,
+							{boardInfo: _elm_lang$core$Maybe$Nothing}));
+					var m2 = _p43._0;
+					var _v21 = m2;
+					m1 = _v21;
+					continue model_processNextEvents;
+				} else {
+					return m1;
+				}
+			} else {
+				var _p46 = _p41._0;
+				var _p44 = _elm_lang$core$Native_Utils.cmp(_p46.activationTime, m1.currentSimulationTime) < 1;
+				if (_p44 === false) {
+					return m1;
+				} else {
+					var m2 = _elm_lang$core$Native_Utils.update(
+						m1,
+						{
+							nextEvents: function () {
+								var _p45 = _elm_lang$core$List$tail(m1.nextEvents);
+								if (_p45.ctor === 'Nothing') {
+									return _elm_lang$core$Native_List.fromArray(
+										[]);
+								} else {
+									return _p45._0;
+								}
+							}()
+						});
+					var m3 = A2(_user$project$BoardViewer$model_processEvent, m2, _p46);
+					var _v24 = m3;
+					m1 = _v24;
+					continue model_processNextEvents;
+				}
+			}
+		}
+	}
+};
+var _user$project$BoardViewer$EDisplayRobot = function (a) {
+	return {ctor: 'EDisplayRobot', _0: a};
+};
+var _user$project$BoardViewer$model_addRobotEvents = function (model) {
+	var trackPermanence = 20.0;
+	var leaveTrackEvery = 0.5;
+	var enableTrack = false;
+	var simulationTime = model.currentSimulationTime;
+	var isTimeToLeaveTheTrack = function (deltaTime) {
+		var cycle = function (v) {
+			return _elm_lang$core$Basics$truncate(v / leaveTrackEvery);
+		};
+		var st1 = simulationTime;
+		var st0 = simulationTime - deltaTime;
+		return enableTrack ? (_elm_lang$core$Native_Utils.cmp(
+			cycle(st0),
+			cycle(st1)) < 0) : false;
+	};
+	var processRobot = function (_p47) {
+		var _p48 = _p47;
+		var _p50 = _p48._1;
+		var direction = _p50.robot.direction;
+		var thereIsMirror = ((_elm_lang$core$Native_Utils.cmp(direction, 0.0) > -1) && (_elm_lang$core$Native_Utils.cmp(direction, 90.0) < 1)) || (_elm_lang$core$Native_Utils.cmp(direction, 270.0) > -1);
+		var robotInfo = _p50.robot;
+		var deltaTimeToRequiredSpeed = (_p50.robot.requiredSpeed - _p50.robot.currentSpeed) / _p50.robot.acceleration;
+		var deltaTime = simulationTime - _p48._0;
+		var _p49 = (_elm_lang$core$Native_Utils.cmp(deltaTime, deltaTimeToRequiredSpeed) > 0) ? {ctor: '_Tuple3', _0: deltaTimeToRequiredSpeed, _1: deltaTime - deltaTimeToRequiredSpeed, _2: 0.0} : {ctor: '_Tuple3', _0: deltaTime, _1: 0, _2: _p50.robot.acceleration};
+		var deltaTimeWithNormalAcceleration = _p49._0;
+		var deltaTimeWithMaxSpeed = _p49._1;
+		var currentAcceleration = _p49._2;
+		var movement1 = (_p50.robot.currentSpeed * deltaTimeWithNormalAcceleration) + ((0.5 * _p50.robot.acceleration) * (deltaTimeWithNormalAcceleration * deltaTimeWithNormalAcceleration));
+		var movement2 = _p50.robot.requiredSpeed * deltaTimeWithMaxSpeed;
+		var movement = movement1 + movement2;
+		var dy = movement * _elm_lang$core$Basics$sin(
+			_elm_lang$core$Basics$degrees(_p50.robot.direction));
+		var posY = _p50.robot.posY + dy;
+		var dx = movement * _elm_lang$core$Basics$cos(
+			_elm_lang$core$Basics$degrees(_p50.robot.direction));
+		var posX = _p50.robot.posX + dx;
+		var track = {
+			deactivationTime: simulationTime + trackPermanence,
+			lineCords: _elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$svg$Svg_Attributes$x1(
+					_elm_lang$core$Basics$toString(posX)),
+					_elm_lang$svg$Svg_Attributes$y1(
+					_elm_lang$core$Basics$toString(posY)),
+					_elm_lang$svg$Svg_Attributes$x2(
+					_elm_lang$core$Basics$toString(posX + 1.0)),
+					_elm_lang$svg$Svg_Attributes$y2(
+					_elm_lang$core$Basics$toString(posY + 1.0)),
+					_elm_lang$svg$Svg_Attributes$stroke(_p50.color)
+				])
+		};
+		var reloadingTime1 = _p50.robot.reloadingTime - deltaTime;
+		var reloadingTime2 = (_elm_lang$core$Native_Utils.cmp(reloadingTime1, 0.0) < 0) ? 0.0 : reloadingTime1;
+		return {
+			ctor: '_Tuple2',
+			_0: _user$project$BoardViewer$EDisplayRobot(
+				_elm_lang$core$Native_Utils.update(
+					_p50,
+					{
+						robot: _elm_lang$core$Native_Utils.update(
+							robotInfo,
+							{posX: posX, posY: posY, reloadingTime: reloadingTime2})
+					})),
+			_1: track
+		};
+	};
+	var finalEvents = A3(
+		_elm_lang$core$Dict$foldl,
+		F3(
+			function (_p52, _p51, events1) {
+				var _p53 = _p51;
+				var _p56 = _p53._0;
+				var deltaTime = simulationTime - _p56;
+				var _p54 = processRobot(
+					{ctor: '_Tuple2', _0: _p56, _1: _p53._1});
+				var robotEvent = _p54._0;
+				var activeTrack = _p54._1;
+				var events2 = function () {
+					var _p55 = isTimeToLeaveTheTrack(deltaTime);
+					if (_p55 === true) {
+						return A2(
+							_elm_lang$core$List_ops['::'],
+							{
+								activationTime: _p56,
+								event: _user$project$BoardViewer$EDisplayTrack(activeTrack)
+							},
+							events1);
+					} else {
+						return events1;
+					}
+				}();
+				var events3 = A2(
+					_elm_lang$core$List_ops['::'],
+					{activationTime: _p56, event: robotEvent},
+					events2);
+				return events3;
+			}),
+		model.activeEvents,
+		model.robotInfo);
+	var finalModel = _elm_lang$core$Native_Utils.update(
+		model,
+		{activeEvents: finalEvents});
+	return finalModel;
+};
+var _user$project$BoardViewer$model_processAllEvents = F2(
+	function (m1, deltaRealTimeSeconds) {
+		var _p57 = m1.boardInfo;
+		if (_p57.ctor === 'Nothing') {
+			return m1;
+		} else {
+			var deltaTime = A2(_user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime, _p57._0, deltaRealTimeSeconds);
+			var m2 = _elm_lang$core$Native_Utils.update(
+				m1,
+				{currentSimulationTime: m1.currentSimulationTime + deltaTime, totRedrawFrames: m1.totRedrawFrames + 1, totSeconds: m1.totSeconds + deltaRealTimeSeconds});
+			var m3 = _user$project$BoardViewer$model_processActiveEvents(m2);
+			var m4 = _user$project$BoardViewer$model_processNextEvents(m3);
+			var m5 = _user$project$BoardViewer$model_addRobotEvents(m4);
+			return m5;
+		}
+	});
+var _user$project$BoardViewer$model_advance = F2(
+	function (m1, deltaRealTimeSeconds) {
+		var _p58 = _user$project$BoardViewer$model_loadStreamedData(m1);
+		var m2 = _p58._0;
+		var canProcess = _p58._1;
+		return canProcess ? A2(_user$project$BoardViewer$model_processAllEvents, m2, deltaRealTimeSeconds) : m2;
+	});
 var _user$project$BoardViewer$EDrive = function (a) {
 	return {ctor: 'EDrive', _0: a};
 };
@@ -10641,8 +11426,8 @@ var _user$project$BoardViewer$ECreateRobot = function (a) {
 	return {ctor: 'ECreateRobot', _0: a};
 };
 var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
-	var _p34 = eventType;
-	switch (_p34) {
+	var _p59 = eventType;
+	switch (_p59) {
 		case 1:
 			return A2(_elm_lang$core$Json_Decode$map, _user$project$BoardViewer$ECreateRobot, _user$project$BoardViewer$eventCreateRobotDecoder);
 		case 2:
@@ -10661,10 +11446,10 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 945, column: 5},
-					end: {line: 953, column: 76}
+					start: {line: 1184, column: 5},
+					end: {line: 1192, column: 76}
 				},
-				_p34)(
+				_p59)(
 				A2(
 					_elm_lang$core$Basics_ops['++'],
 					'Unknown eventType tag ',
@@ -10696,9 +11481,6 @@ var _user$project$BoardViewer$boardInfoDecoder = A9(
 var _user$project$BoardViewer$MsgWindowSize = function (a) {
 	return {ctor: 'MsgWindowSize', _0: a};
 };
-var _user$project$BoardViewer$MsgDeactivateEvents = function (a) {
-	return {ctor: 'MsgDeactivateEvents', _0: a};
-};
 var _user$project$BoardViewer$MsgStreamBoardInfo = function (a) {
 	return {ctor: 'MsgStreamBoardInfo', _0: a};
 };
@@ -10724,8 +11506,9 @@ var _user$project$BoardViewer$init = function () {
 		nextEvents: _elm_lang$core$Native_List.fromArray(
 			[]),
 		robotInfo: _elm_lang$core$Dict$empty,
-		activeEvents: _elm_lang$core$Dict$empty,
-		nextEventId: 0,
+		usedRobotColors: _elm_lang$core$Dict$empty,
+		activeEvents: _elm_lang$core$Native_List.fromArray(
+			[]),
 		currentSimulationTime: 0.0,
 		errorMessages: _elm_lang$core$Native_List.fromArray(
 			[]),
@@ -10762,8 +11545,8 @@ var _user$project$BoardViewer$fetchBoardInfo = function (isInit) {
 };
 var _user$project$BoardViewer$update = F2(
 	function (msg, model1) {
-		var _p36 = msg;
-		switch (_p36.ctor) {
+		var _p61 = msg;
+		switch (_p61.ctor) {
 			case 'MsgInitBoard':
 				return {
 					ctor: '_Tuple2',
@@ -10771,18 +11554,18 @@ var _user$project$BoardViewer$update = F2(
 					_1: _user$project$BoardViewer$fetchBoardInfo(true)
 				};
 			case 'MsgStreamBoardInfo':
-				var _p38 = _p36._0;
-				var _p37 = model1.isInitializated;
-				if (_p37 === false) {
+				var _p63 = _p61._0;
+				var _p62 = model1.isInitializated;
+				if (_p62 === false) {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_init, model1, _p38),
+						_0: A2(_user$project$BoardViewer$model_init, model1, _p63),
 						_1: _user$project$BoardViewer$fetchBoardInfo(false)
 					};
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_addStream, model1, _p38),
+						_0: A2(_user$project$BoardViewer$model_addStream, model1, _p63),
 						_1: _user$project$BoardViewer$fetchBoardInfo(false)
 					};
 				}
@@ -10799,22 +11582,22 @@ var _user$project$BoardViewer$update = F2(
 									_elm_lang$core$Basics_ops['++'],
 									model1.errorMessages,
 									_elm_lang$core$Native_List.fromArray(
-										[_p36._0])))
+										[_p61._0])))
 						}),
 					_1: _user$project$BoardViewer$fetchBoardInfo(
 						_elm_lang$core$Basics$not(model1.isInitializated))
 				};
 			case 'MsgAdvanceRealTime':
-				var _p41 = _p36._0;
-				var _p39 = model1.simulationIsStarted;
-				if (_p39 === false) {
-					var _p40 = model1.isInitializated;
-					if (_p40 === true) {
+				var _p66 = _p61._0;
+				var _p64 = model1.simulationIsStarted;
+				if (_p64 === false) {
+					var _p65 = model1.isInitializated;
+					if (_p65 === true) {
 						return {
 							ctor: '_Tuple2',
 							_0: _elm_lang$core$Native_Utils.update(
 								model1,
-								{streamingLeft: model1.streamingLeft - _p41}),
+								{streamingLeft: model1.streamingLeft - _p66}),
 							_1: _elm_lang$core$Platform_Cmd$none
 						};
 					} else {
@@ -10823,29 +11606,16 @@ var _user$project$BoardViewer$update = F2(
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_advance, model1, _p41),
+						_0: A2(_user$project$BoardViewer$model_advance, model1, _p66),
 						_1: _elm_lang$core$Platform_Cmd$none
 					};
 				}
-			case 'MsgDeactivateEvents':
-				return {
-					ctor: '_Tuple2',
-					_0: A3(
-						_elm_lang$core$Set$foldl,
-						F2(
-							function (i, m) {
-								return A2(_user$project$BoardViewer$model_deactivateEvent, m, i);
-							}),
-						model1,
-						_p36._0),
-					_1: _elm_lang$core$Platform_Cmd$none
-				};
 			default:
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model1,
-						{windowSize: _p36._0}),
+						{windowSize: _p61._0}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
 		}

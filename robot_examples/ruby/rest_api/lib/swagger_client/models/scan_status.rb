@@ -21,6 +21,7 @@ module SwaggerClient
     # The aperture angle, in degree, divided by 2.
     attr_accessor :semi_aperture_angle
 
+    # -1 if no robot was found.
     attr_accessor :distance
 
     # Attribute mapping from ruby-style variable name to JSON key.

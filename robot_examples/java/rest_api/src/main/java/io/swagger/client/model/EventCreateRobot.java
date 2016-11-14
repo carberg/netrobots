@@ -15,7 +15,7 @@ import java.math.BigDecimal;
  **/
 
 @ApiModel(description = "An event signaling to the UI, the creation of a Robot. eventType is 1.")
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-07-06T09:30:53.741+02:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
 public class EventCreateRobot extends Event  {
   
   private BigDecimal eventType = null;

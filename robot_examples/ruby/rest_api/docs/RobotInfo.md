@@ -12,5 +12,6 @@ Name | Type | Description | Notes
 **acceleration** | **Float** |  | 
 **reloading_time** | **Float** | 0 if the robot can fire immediately. | 
 **health** | **Float** | 0 if the robot is dead. | 
+**points** | **Float** | the earned points. | 
 
 

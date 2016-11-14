@@ -24,9 +24,10 @@ data RobotInfo = RobotInfo
     , acceleration :: Float
     , reloadingTime :: Float
     , health :: Float
+    , points :: Float
     } deriving (Show, Eq, Generic)
 
 instance FromJSON RobotInfo
 instance ToJSON RobotInfo
 instance Arbitrary RobotInfo where
-    arbitrary = RobotInfo <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+    arbitrary = RobotInfo <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

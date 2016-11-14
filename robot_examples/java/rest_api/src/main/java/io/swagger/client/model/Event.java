@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  **/
 
 @ApiModel(description = "Base class from which all different type of Events are derived.")
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-07-06T09:30:53.741+02:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
 public class Event   {
   
   private BigDecimal eventType = null;

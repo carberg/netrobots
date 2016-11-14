@@ -116,7 +116,7 @@ class ScanStatus implements ArrayAccess
     protected $semi_aperture_angle;
     
     /**
-      * $distance 
+      * $distance -1 if no robot was found.
       * @var float
       */
     protected $distance;
@@ -189,7 +189,7 @@ class ScanStatus implements ArrayAccess
   
     /**
      * Sets distance
-     * @param float $distance 
+     * @param float $distance -1 if no robot was found.
      * @return $this
      */
     public function setDistance($distance)

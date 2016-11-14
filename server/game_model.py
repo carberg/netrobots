@@ -29,6 +29,7 @@ from server.rest_api.models import EventCreateRobot, EventDrive, EventExplosion,
 from server.rest_api.models import EventRemoveRobot, EventRobotCollision, EventScan
 from server.rest_api.models import Event
 import uuid
+from math import sqrt
 import sys
 from six import iteritems
 
@@ -357,45 +358,53 @@ class Board:
         """Reinit. Used in debug. """
         self.__init__(size)
 
-    def radar(self, scanning_robot, xy, max_scan_distance, degree, resolution):
+    def radar(self, scanning_robot, max_scan_distance, degree, semiaperture):
         """
         :type scanning_robot: Robot
-        :type xy: (float, float)
         :type max_scan_distance: float
         :type degree: float
-        :type resolution: float
+        :type semiaperture: float
         :rtype: (float, Robot)
 
-        :return: (0.0, None) if there is no found object, the object with minimum distance otherwise.
+        :return: (-1.0, None) if there is no found object, the object with minimum distance otherwise.
         """
-        key = hashlib.md5(repr(dict(time=time.time(), xy=xy, degree=degree, resolution=resolution,
-                                    distance=max_scan_distance))).hexdigest()
 
-        self._radar[key] = dict(xy=xy, degree=degree, resolution=resolution, distance=max_scan_distance,
-                                spawntime=time.time())
+        degree %= 360.0
+        semiaperture %= 360.0
 
-        foundDistance = 0
-        foundRobot = None
+        start_degree = (degree - semiaperture) % 360.0
+        end_degree = (degree + semiaperture) % 360.0
+        angle_cross_zero = (start_degree > end_degree)
 
-        degree %= 360
-        for robot in [x for x in self._robots_by_token.values() if x != scanning_robot]:
+        found_distance = -1.0
+        found_robot = None
+        for robot in self._robots_by_token.values():
             """:type robot: Robot"""
+
+            if robot == scanning_robot:
+                continue
 
             if robot.is_dead:
                 continue
-            distance, angle = robot.distance_from_point(xy)
-            angle = float(int(180 + angle) % 360)
 
-            if self.angle_distance(angle, degree) > resolution:
+            distance, angle = scanning_robot.distance(robot)
+
+            if angle_cross_zero:
+                inside = (angle >= start_degree and angle <= 360.0) or (angle <= end_degree)
+            else:
+                inside = (angle >= start_degree and angle <= end_degree)
+
+            if not inside:
                 continue
+
             if distance > max_scan_distance:
                 continue
 
-            if foundRobot is None or distance <= foundDistance:
-                foundDistance = distance
-                foundRobot = robot
+            if found_robot is None or distance <= found_distance:
+                found_distance = distance
+                found_robot = robot
 
-        return (foundDistance, foundRobot)
+        return found_distance, found_robot
 
     def detect_collision(self, robot, dxy):
         """
@@ -493,22 +502,6 @@ class Board:
         for m in missiles_to_remove:
             self.remove_missile(m)
 
-    @staticmethod
-    def angle_distance(angle, degree):
-        """
-        :type angle: float
-        :type degree: float
-
-        :param angle:
-        :param degree:
-        :return:
-        TODO document the meaning
-        """
-        ret = (angle - degree) if angle > degree else (degree - angle)
-        if ret > 180.0:
-            ret = 360.0 - ret
-        return ret
-
 class Missile:
     """
     A balistic missile with a precise point of explosion.
@@ -564,12 +557,11 @@ class Missile:
                         self._owner.points += total_damage
 
                         # Manage BoardViewer Events
-                        # NOTE: if the missile does not make any damage, does not generate any explosion
                         e = EventExplosion()
                         e.activation_time = self._board.global_time()
                         e.event_type = 5
                         e.robot = self._owner.get_robot_info()
-                        e.hitRobot = robot.get_robot_info()
+                        e.hit_robot = robot.get_robot_info()
                         e.damage = total_damage
                         self._board.add_streamed_event(e)
 
@@ -736,7 +728,7 @@ class Robot(RobotStatus):
         :return: the minimum time a robot can reload the fire
         IMPORTANT: change the REST API description in case of modification of these values.
         """
-        return 1.0
+        return 2.0
 
     def get_minimum_configurable_bullet_damage(self):
         """
@@ -792,7 +784,7 @@ class Robot(RobotStatus):
         self._configuration.max_fire_distance = 700.0
         self._configuration.bullet_speed = 500.0  # m/s
         self._configuration.bullet_damage = 10.0
-        self._configuration.cannon_reloading_time = 1.0
+        self._configuration.cannon_reloading_time = 2.0
 
         self.normalize_to_valid_strength()
 
@@ -871,6 +863,7 @@ class Robot(RobotStatus):
             r.acceleration = self.configuration.decelleration
         r.reloading_time = self.cannon_reloading_time
         r.health = self.health
+        r.points = self.points
 
         return r
 
@@ -895,8 +888,14 @@ class Robot(RobotStatus):
         :type direction: float
         :type semiApertureAngle: float
         """
-        direction, semiApertureAngle = float(int(direction) % 360), float(max(1, int(semiApertureAngle) % 180))
-        (distance, foundRobot) = self._board.radar(self, (self._pos_x, self._pos_y), self._configuration.max_scan_distance, direction, semiApertureAngle)
+
+        if semiApertureAngle <= 0.0:
+            semiApertureAngle = 1.0
+
+        semiApertureAngle %= 180.0
+        direction %= 360.0
+
+        distance, foundRobot = self._board.radar(self, self._configuration.max_scan_distance, direction, semiApertureAngle)
 
         scan = ScanStatus()
         scan.direction = direction
@@ -907,9 +906,6 @@ class Robot(RobotStatus):
 
     def get_scan_hit_robot(self):
         return self._scan_hit_robot
-
-    def no_scan(self):
-        self._scan_status = None
 
     def fire(self, degree, distance):
         """
@@ -945,13 +941,18 @@ class Robot(RobotStatus):
         :rtype: float
         :param xy: point
         :rtype: (float, float)
-        :return: distance, angle
+        :return: distance, angle The angle is always normalized from 0.0 to 360.0
         """
+
         dx = (xy[0] - self._pos_x)
         dy = (xy[1] - self._pos_y)
-        dist = (dx ** 2 + dy ** 2) ** 0.5
+
+        if dx == dy:
+            return 0.0, 0.0
+
+        dist = sqrt(dx ** 2 + dy ** 2)
         rads = atan2(dy, dx)
-        angle = float(degrees(rads) % 360)
+        angle = float(degrees(rads)) % 360.0
         return dist, angle
 
     def distance(self, enemy):
@@ -960,9 +961,7 @@ class Robot(RobotStatus):
         :rtype: (float, float)
         :return: distance, angle
         """
-        dist, angle = enemy.distance_from_point((self._pos_x, self._pos_y))
-        angle = float(int(angle + 180.0) % 360)
-        return dist, angle
+        return self.distance_from_point((enemy.pos_x, enemy.pos_y))
 
     def block(self):
         """ Block immediately the robot.

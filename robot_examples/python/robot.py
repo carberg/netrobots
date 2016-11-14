@@ -199,8 +199,11 @@ def run_robot_sniper(serverAddress, robotName):
         sc.semiaperture = teta
         robot.set_scan(sc)
         robot.send_cmd()
+        scan_distance = -1.0
+        if robot.get_status().scan_status is not None:
+            scan_distance = robot.get_status().scan_status.distance
 
-        if robot.get_status().scan_status.distance > 40.0:  # maximum damage radius
+        if scan_distance > -1.0 and scan_distance > 40.0:  # maximum damage radius
             if robot.get_status().cannon_reloading_time == 0.0:
                 fc = FireCommand()
                 fc.distance = robot.get_status().scan_status.distance

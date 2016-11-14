@@ -1,10 +1,15 @@
 * Development Notes 
+
 The application is in development/alpha phase. There are still many TODO inside the source code files, and these notes.
 
-** TODO Game Server 
+TODO rebase debug branch, update master, delete debug locally and on the remote server
 
+TODO add in the README of GitHub a screenshoot of the game.
+
+TODO add a README.md file for each important directory
+
+** TODO Game Server 
 TODO remove not used code
-TODO ship also the ELM compiled JS files, with the code, so it is immediable executable
 TODO adapt the README of the application
 TODO create a standard Setupy.py file and study the Pip.py approach, because up to date development is done using nix
 *** TODO Test installation inside a Docker container
@@ -44,53 +49,70 @@ Event-based synchro:
 TODO complete the package description file of ELM at the end
 TODO remove not used code for the old Boand JS based
 
-*** Graphics
 
-TODO study better animation library  https://github.com/mdgriffith/elm-style-animation
+*** TODO Various Improvements
+TODO do not display any more the board limits
 
-TODO the home-page include:
-- TODO reference to the project home-page
-- TODO REST-API documentation automatically generated
-- DONE link to the board
+MAYBE clip explosions, missiles and so on inside the board
+
+TODO points lost on collision seems excessive
+
+MAYBE dead robots must remain in the leggend with their points and the time they lived
+
+TODO the home-page should include:
+TODO reference to the project home-page
+TODO REST-API documentation automatically generated
+DONE link to the board
 
 DONE initial screen:
 - JS ask for buffering
 - JS show a SVG animation with the waiting of new data
 - JS start displaying the board
 
-TODO scan graphics:
-- show for a scan the hitted robot, the source of the target with a line
-- show the area of scan involved, but only until the hitted robot
-- in case of scan without success show the area but without hitting line
+TODO use a ticket that is an integer multiple of the turn
 
-TODO missile graphics
-- use the same color of the firinng robot
-- show the target position
-- show the explosion and the involved area
+TODO check the behaviour of the sniper comparing with the traditional sniper
 
-TODO tanks graphics:
-- show the thanks in a fade-away trace so it is more clear its movements, the source of a missile and the 
-- leave signes of the thank track, as individual elements (referenced in defs), and then change their opacity and their live over time
-- this generate a lot of elements in the scene graph (QT support millions of elements in the scene graph, but this is not the case for SVG probably)
-- leave a sign every 1 second or similar, like a series of "dots"
-- there cane be interruptions between the signs
-- a sign is an element, with a start visibility, and an opacity or color level fading to 0 in a certain time duration.
-- the thank is composed of the body and of the tower
-- the tower rotate itself in less than 0.5 seconds before the fire and then fire
-- the missile path is dotted and it comprehend also the future destination
-
-TODO coordinate model:
-- TODO physical: dimension of the canvas on the screen 100% - 100% and preserve proportions
-- TODO use visible dimensions for tanks and missiles on the board, related to EM characters
-- TODO logical dimensions of the canvas on the board (the dimensions of the board)
-- TODO for partial movements and positions there are float values
-
-TODO add text/labels as robot name
-TODO test always transparency of the SCAN and use a light color because a robot can always view 
-TODO it should use a different color for each robot, and use the same color for the scan with transparency, so you know where the robot is viewing
-TODO it should compose the colors of different scans toghether
+MAYBE when scan aperture is 180 nothing is displayed
 
 TODO send also complete stats about missing turns of the ROBOTS
+
+TODO sniper continue firing after the first stop
+TODO cannonReloadingTime is
+How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
+but it does not seem respected!
+
+TODO create an initial home-page for the project, the REST-API and so on
+TODO include stats with boardinfo about robots missing commands, and so on
+TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
+
+TODO improve the streaming process:
+- TODO before init tell that the board is loading 
+- TODO show initial board
+- TODO show at the center of the board the streaming message, and the remaining time
+
+TODO manage the correct real-time time-frame
+
+TODO add keyed elements/nodes, for board parts that are subject to frequent add and remove of node
+TODO add lazy nodes (if they speedup performances), in particular standard symbols definitions and so on
+TODO use lazy and dynamic nodes, because with paths and so on i generate a lot of points
+
+TODO remove debug lines from scan
+
+TODO check remanining TODO on the BoardViewer.elm file
+
+TODO show server version number
+TODO show the API version number
+TODO show the characteristics of robots on the board
+
+** TODO Client Robots
+TODO when the server send an error message into http the Python client library start an infinite loop and uses 100% of CPU resources
+
+*** Haskell Robot
+TODO include the FRP framework version into this projet
+TODO test with a simple robot
+TODO make it compile under nix and Stack
+TODO annotate the original HRobots project, that the new reference repo is ...
 
 * Game Rules Improvements
 MAYBE hitting an enemy is 1/2 damage as health

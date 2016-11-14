@@ -2,3 +2,5 @@
 *.pyc
 /env/
 *~
+elm/elm-stuff/
+

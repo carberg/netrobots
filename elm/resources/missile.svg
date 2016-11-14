@@ -1,0 +1,36 @@
+<svg xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://www.w3.org/2000/svg" version="1.0" xmlns:cc="http://creativecommons.org/ns#" viewBox="0 0 50 28" xmlns:dc="http://purl.org/dc/elements/1.1/">
+ <g transform="matrix(1.077 0 0 1.0426 -88.42 -61.208)">
+  <g transform="translate(0,50)">
+   <g stroke="#000" stroke-width="2" fill="none">
+    <path d="m83.083 22.775s2.5554-5.5096 5.9192-5.5096h3.3638"/>
+    <path d="m83.008 22.624s2.5554 5.5096 5.9192 5.5096h3.3638"/>
+    <path d="m89.207 17.266 7.9994-0.14891s3.9792-1.1913 4.7176-1.1913 0.80066 0.0251 0.80066 0.0251"/>
+    <path d="m89.505 28.066 7.9994 0.1489s3.9791 1.1913 4.7175 1.1913h0.52807"/>
+    <path d="m102.79 15.926 1.4768-4.0205 8.1224 0.29783 0.95686-0.0934 0.0277 5.9009-5.2925 0.007-5.2925 0.007-0.41022-0.002z"/>
+    <path d="m113.37 16.214 13.085 0.15779s1.0312 0.74455 1.0312 4.7651v4.0206"/>
+   </g>
+   <g transform="matrix(0 -.18805 .051804 0 83.041 34.248)" stroke="#000" stroke-width="20.263" fill="#fff">
+    <polygon points="126.17 803.18 126.17 829.41 85.79 825.08 85.333 781.74 85.333 781.74"/>
+    <polygon points="126.17 803.18 126.17 829.41 85.79 825.08 85.333 781.74 85.333 781.74"/>
+   </g>
+   <path d="m113.4 29.091 13.038-0.1134s1.0312-0.74455 1.0312-4.7651v-4.0206" stroke="#000" stroke-width="2" fill="none"/>
+   <g stroke="#000" fill="#fff">
+    <g transform="matrix(0 -.18805 .051804 0 83.03 33.749)" stroke-width="20.263">
+     <polygon points="0.5 804.18 0.5 830.41 40.877 826.08 41.333 782.74 41.333 782.74"/>
+     <polygon points="0.5 804.18 0.5 830.41 40.877 826.08 41.333 782.74 41.333 782.74"/>
+    </g>
+    <g transform="matrix(0 -.20839 .051804 0 83.019 35.973)" stroke-width="19.249">
+     <rect height="22.357" width="60.276" y="838.52" x="33.579"/>
+     <rect height="22.357" width="60.276" y="838.52" x="33.579"/>
+    </g>
+    <g transform="matrix(0 -.20839 .051804 0 83.019 35.973)" stroke-width="19.249">
+     <rect height="9.267" width="64.866" y="848.08" x="31.196"/>
+     <rect height="9.267" width="64.866" y="848.08" x="31.196"/>
+    </g>
+   </g>
+   <flowRoot style="word-spacing:0px;letter-spacing:0px" xml:space="preserve" transform="translate(-32,-88)" line-height="125%" font-size="40px" font-family="&apos;Bitstream Vera Sans&apos;" fill="#000000"><flowRegion><rect y="295" x="593" width="131" height="107"/></flowRegion><flowPara/></flowRoot>
+   <flowRoot style="word-spacing:0px;letter-spacing:0px" xml:space="preserve" transform="translate(-32,-88)" line-height="125%" font-size="40px" font-family="&apos;Bitstream Vera Sans&apos;" fill="#000000"><flowRegion><rect y="100" x="497" width="224" height="105"/></flowRegion><flowPara/></flowRoot>
+   <path d="m102.8 29.515 1.4768 4.0206 8.1224-0.29781 0.95687 0.0934 0.0277-5.9009-5.2925-0.007-5.2925-0.007-0.41021 0.002z" stroke="#000" stroke-width="2" fill="none"/>
+  </g>
+ </g>
+</svg>

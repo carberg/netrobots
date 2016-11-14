@@ -19,15 +19,3 @@ sleep 2
 xdg-open http://localhost:8888 &
 cd robot_examples/python
 python robot.py --server http://localhost:8888 --robot rabbit &
-python robot.py --server http://localhost:8888 --robot rabbit &
-python robot.py --server http://localhost:8888 --robot rabbit &
-python robot.py --server http://localhost:8888 --robot sniper &
-
-# TODO exhacegarate
-python robot.py --server http://localhost:8888 --robot rabbit &
-python robot.py --server http://localhost:8888 --robot rabbit &
-python robot.py --server http://localhost:8888 --robot rabbit &
-
-
-
-

@@ -72,6 +72,7 @@
   exports.prototype['semiApertureAngle'] = undefined;
 
   /**
+   * -1 if no robot was found.
    * @member {Number} distance
    */
   exports.prototype['distance'] = undefined;

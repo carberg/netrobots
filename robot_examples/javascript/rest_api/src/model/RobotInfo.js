@@ -35,8 +35,9 @@
    * @param acceleration
    * @param reloadingTime
    * @param health
+   * @param points
    */
-  var exports = function(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health) {
+  var exports = function(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health, points) {
 
     this['robotId'] = robotId;
     this['posX'] = posX;
@@ -47,6 +48,7 @@
     this['acceleration'] = acceleration;
     this['reloadingTime'] = reloadingTime;
     this['health'] = health;
+    this['points'] = points;
   };
 
   /**
@@ -86,6 +88,9 @@
       }
       if (data.hasOwnProperty('health')) {
         obj['health'] = ApiClient.convertToType(data['health'], 'Number');
+      }
+      if (data.hasOwnProperty('points')) {
+        obj['points'] = ApiClient.convertToType(data['points'], 'Number');
       }
     }
     return obj;
@@ -139,6 +144,12 @@
    * @member {Number} health
    */
   exports.prototype['health'] = undefined;
+
+  /**
+   * the earned points.
+   * @member {Number} points
+   */
+  exports.prototype['points'] = undefined;
 
 
 

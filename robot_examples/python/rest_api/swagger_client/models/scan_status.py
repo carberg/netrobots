@@ -100,7 +100,7 @@ class ScanStatus(object):
     def distance(self):
         """
         Gets the distance of this ScanStatus.
-
+        -1 if no robot was found.
 
         :return: The distance of this ScanStatus.
         :rtype: float
@@ -111,7 +111,7 @@ class ScanStatus(object):
     def distance(self, distance):
         """
         Sets the distance of this ScanStatus.
-
+        -1 if no robot was found.
 
         :param distance: The distance of this ScanStatus.
         :type: float

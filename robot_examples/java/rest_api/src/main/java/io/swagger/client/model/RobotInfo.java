@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  **/
 
 @ApiModel(description = "Info about the robot.")
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-07-06T09:30:53.741+02:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
 public class RobotInfo   {
   
   private BigDecimal robotId = null;
@@ -25,6 +25,7 @@ public class RobotInfo   {
   private Float acceleration = null;
   private Float reloadingTime = null;
   private Float health = null;
+  private Float points = null;
 
   
   /**
@@ -185,6 +186,24 @@ public class RobotInfo   {
   }
 
   
+  /**
+   * the earned points.
+   **/
+  public RobotInfo points(Float points) {
+    this.points = points;
+    return this;
+  }
+  
+  @ApiModelProperty(example = "null", required = true, value = "the earned points.")
+  @JsonProperty("points")
+  public Float getPoints() {
+    return points;
+  }
+  public void setPoints(Float points) {
+    this.points = points;
+  }
+
+  
 
   @Override
   public boolean equals(java.lang.Object o) {
@@ -203,12 +222,13 @@ public class RobotInfo   {
         Objects.equals(this.requiredSpeed, robotInfo.requiredSpeed) &&
         Objects.equals(this.acceleration, robotInfo.acceleration) &&
         Objects.equals(this.reloadingTime, robotInfo.reloadingTime) &&
-        Objects.equals(this.health, robotInfo.health);
+        Objects.equals(this.health, robotInfo.health) &&
+        Objects.equals(this.points, robotInfo.points);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health);
+    return Objects.hash(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health, points);
   }
 
   @Override
@@ -225,6 +245,7 @@ public class RobotInfo   {
     sb.append("    acceleration: ").append(toIndentedString(acceleration)).append("\n");
     sb.append("    reloadingTime: ").append(toIndentedString(reloadingTime)).append("\n");
     sb.append("    health: ").append(toIndentedString(health)).append("\n");
+    sb.append("    points: ").append(toIndentedString(points)).append("\n");
     sb.append("}");
     return sb.toString();
   }

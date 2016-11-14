@@ -13,5 +13,6 @@ type RobotInfo struct {
     Acceleration  float32  `json:"acceleration,omitempty"`
     ReloadingTime  float32  `json:"reloadingTime,omitempty"`
     Health  float32  `json:"health,omitempty"`
+    Points  float32  `json:"points,omitempty"`
     
 }

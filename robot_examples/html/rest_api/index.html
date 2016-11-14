@@ -787,7 +787,7 @@ font-style: italic;
       
       <div class="param">bulletDamage </div><div class="param-desc"><span class="param-type">Float</span> The max health damage a bullet can inflict when it reach exactly the target.\nDefault value: 10.0.\nActually max allowed value is 20 and minimum allowed value is 1.\nThe bullet hit exactly a target in case the explosion is within a certain distance, actually 2 meters.\nThe bullet can make a limited damage if it explodes near the target.\nThe limited damage decrease linearly from 50% to 0%, from 2 meters to 45 meters distance from the target.\nWhen you configure a robot, there is an associated a strenght using an heuristic, based on robot configured characteristics.\nThen the bulletDamage is increased until it does not reach the maximum possibile value.\n</div>
       
-      <div class="param">cannonReloadingTime </div><div class="param-desc"><span class="param-type">Float</span> How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n</div>
+      <div class="param">cannonReloadingTime </div><div class="param-desc"><span class="param-type">Float</span> How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n</div>
       
       
     </div>  <!-- field-items -->
@@ -815,6 +815,8 @@ font-style: italic;
       <div class="param">reloadingTime </div><div class="param-desc"><span class="param-type">Float</span> 0 if the robot can fire immediately.</div>
       
       <div class="param">health </div><div class="param-desc"><span class="param-type">Float</span> 0 if the robot is dead.</div>
+      
+      <div class="param">points </div><div class="param-desc"><span class="param-type">Float</span> the earned points.</div>
       
       
     </div>  <!-- field-items -->
@@ -887,7 +889,7 @@ font-style: italic;
       
       <div class="param">semiApertureAngle </div><div class="param-desc"><span class="param-type">Float</span> The aperture angle, in degree, divided by 2.</div>
       
-      <div class="param">distance </div><div class="param-desc"><span class="param-type">Float</span> </div>
+      <div class="param">distance </div><div class="param-desc"><span class="param-type">Float</span> -1 if no robot was found.</div>
       
       
     </div>  <!-- field-items -->

@@ -12,7 +12,7 @@ import io.swagger.annotations.ApiModelProperty;
  **/
 
 @ApiModel(description = "Configurations of the robot.\n")
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-07-06T09:30:53.741+02:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
 public class RobotConfiguration   {
   
   private String name = null;
@@ -208,14 +208,14 @@ public class RobotConfiguration   {
 
   
   /**
-   * How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n
+   * How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n
    **/
   public RobotConfiguration cannonReloadingTime(Float cannonReloadingTime) {
     this.cannonReloadingTime = cannonReloadingTime;
     return this;
   }
   
-  @ApiModelProperty(example = "null", value = "How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n")
+  @ApiModelProperty(example = "null", value = "How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n")
   @JsonProperty("cannonReloadingTime")
   public Float getCannonReloadingTime() {
     return cannonReloadingTime;

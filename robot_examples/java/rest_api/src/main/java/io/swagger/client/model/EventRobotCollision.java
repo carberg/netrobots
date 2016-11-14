@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 
 
 
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-07-06T09:30:53.741+02:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
 public class EventRobotCollision extends Event  {
   
   private BigDecimal eventType = null;

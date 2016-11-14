@@ -300,7 +300,7 @@ class RobotConfiguration(object):
     def cannon_reloading_time(self):
         """
         Gets the cannon_reloading_time of this RobotConfiguration.
-        How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n
+        How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n
 
         :return: The cannon_reloading_time of this RobotConfiguration.
         :rtype: float
@@ -311,7 +311,7 @@ class RobotConfiguration(object):
     def cannon_reloading_time(self, cannon_reloading_time):
         """
         Sets the cannon_reloading_time of this RobotConfiguration.
-        How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n
+        How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n
 
         :param cannon_reloading_time: The cannon_reloading_time of this RobotConfiguration.
         :type: float

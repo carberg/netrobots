@@ -152,7 +152,7 @@
   exports.prototype['bulletDamage'] = undefined;
 
   /**
-   * How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n
+   * How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n
    * @member {Number} cannonReloadingTime
    */
   exports.prototype['cannonReloadingTime'] = undefined;

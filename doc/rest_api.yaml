@@ -94,6 +94,7 @@ definitions:
       distance:
         type: number
         format: float
+        description: -1 if no robot was found.
 
   RobotConfiguration:
     type: object
@@ -154,7 +155,7 @@ definitions:
         type: number
         format: float
         description: |
-          How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.
+          How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
 
   RobotStatus:
     type: object
@@ -371,6 +372,7 @@ definitions:
       - acceleration
       - reloadingTime
       - health
+      - points
     properties:
       robotId:
         type: number
@@ -378,9 +380,11 @@ definitions:
       posX:
         type: number
         format: float
+        description: 0 is the left most point of the board.
       posY:
         type: number
         format: float
+        description: 0 is the upper most point of the board.
       direction:
         description: Direction expressed in degrees. 0 degree is EAST, 90 degree is NORTH, 180 degree is WEST, 270 degree is SOUTH
         type: number
@@ -404,7 +408,10 @@ definitions:
         type: number
         format: float
         description: 0 if the robot is dead.
-
+      points:
+        type: number
+        format: float
+        description: the earned points.
   Event:
     type: object
     description: Base class from which all different type of Events are derived.

@@ -59,7 +59,8 @@ class RobotInfo implements ArrayAccess
         'required_speed' => 'float',
         'acceleration' => 'float',
         'reloading_time' => 'float',
-        'health' => 'float'
+        'health' => 'float',
+        'points' => 'float'
     );
   
     static function swaggerTypes() {
@@ -79,7 +80,8 @@ class RobotInfo implements ArrayAccess
         'required_speed' => 'requiredSpeed',
         'acceleration' => 'acceleration',
         'reloading_time' => 'reloadingTime',
-        'health' => 'health'
+        'health' => 'health',
+        'points' => 'points'
     );
   
     static function attributeMap() {
@@ -99,7 +101,8 @@ class RobotInfo implements ArrayAccess
         'required_speed' => 'setRequiredSpeed',
         'acceleration' => 'setAcceleration',
         'reloading_time' => 'setReloadingTime',
-        'health' => 'setHealth'
+        'health' => 'setHealth',
+        'points' => 'setPoints'
     );
   
     static function setters() {
@@ -119,7 +122,8 @@ class RobotInfo implements ArrayAccess
         'required_speed' => 'getRequiredSpeed',
         'acceleration' => 'getAcceleration',
         'reloading_time' => 'getReloadingTime',
-        'health' => 'getHealth'
+        'health' => 'getHealth',
+        'points' => 'getPoints'
     );
   
     static function getters() {
@@ -181,6 +185,12 @@ class RobotInfo implements ArrayAccess
       */
     protected $health;
     
+    /**
+      * $points the earned points.
+      * @var float
+      */
+    protected $points;
+    
 
     /**
      * Constructor
@@ -199,6 +209,7 @@ class RobotInfo implements ArrayAccess
             $this->acceleration = $data["acceleration"];
             $this->reloading_time = $data["reloading_time"];
             $this->health = $data["health"];
+            $this->points = $data["points"];
         }
     }
     
@@ -388,6 +399,27 @@ class RobotInfo implements ArrayAccess
     {
         
         $this->health = $health;
+        return $this;
+    }
+    
+    /**
+     * Gets points
+     * @return float
+     */
+    public function getPoints()
+    {
+        return $this->points;
+    }
+  
+    /**
+     * Sets points
+     * @param float $points the earned points.
+     * @return $this
+     */
+    public function setPoints($points)
+    {
+        
+        $this->points = $points;
         return $this;
     }
     

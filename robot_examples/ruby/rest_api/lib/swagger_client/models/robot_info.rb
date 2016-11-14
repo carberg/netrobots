@@ -36,6 +36,9 @@ module SwaggerClient
     # 0 if the robot is dead.
     attr_accessor :health
 
+    # the earned points.
+    attr_accessor :points
+
     # Attribute mapping from ruby-style variable name to JSON key.
     def self.attribute_map
       {
@@ -56,7 +59,9 @@ module SwaggerClient
         
         :'reloading_time' => :'reloadingTime',
         
-        :'health' => :'health'
+        :'health' => :'health',
+        
+        :'points' => :'points'
         
       }
     end
@@ -72,7 +77,8 @@ module SwaggerClient
         :'required_speed' => :'Float',
         :'acceleration' => :'Float',
         :'reloading_time' => :'Float',
-        :'health' => :'Float'
+        :'health' => :'Float',
+        :'points' => :'Float'
         
       }
     end
@@ -120,6 +126,10 @@ module SwaggerClient
         self.health = attributes[:'health']
       end
       
+      if attributes[:'points']
+        self.points = attributes[:'points']
+      end
+      
     end
 
     # Check equality by comparing each attribute.
@@ -134,7 +144,8 @@ module SwaggerClient
           required_speed == o.required_speed &&
           acceleration == o.acceleration &&
           reloading_time == o.reloading_time &&
-          health == o.health
+          health == o.health &&
+          points == o.points
     end
 
     # @see the `==` method
@@ -144,7 +155,7 @@ module SwaggerClient
 
     # Calculate hash code according to all attributes.
     def hash
-      [robot_id, pos_x, pos_y, direction, current_speed, required_speed, acceleration, reloading_time, health].hash
+      [robot_id, pos_x, pos_y, direction, current_speed, required_speed, acceleration, reloading_time, health, points].hash
     end
 
     # build the object from hash

@@ -45,7 +45,8 @@ class RobotInfo(object):
             'required_speed': 'float',
             'acceleration': 'float',
             'reloading_time': 'float',
-            'health': 'float'
+            'health': 'float',
+            'points': 'float'
         }
 
         self.attribute_map = {
@@ -57,7 +58,8 @@ class RobotInfo(object):
             'required_speed': 'requiredSpeed',
             'acceleration': 'acceleration',
             'reloading_time': 'reloadingTime',
-            'health': 'health'
+            'health': 'health',
+            'points': 'points'
         }
 
         self._robot_id = None
@@ -69,6 +71,7 @@ class RobotInfo(object):
         self._acceleration = None
         self._reloading_time = None
         self._health = None
+        self._points = None
 
     @property
     def robot_id(self):
@@ -267,6 +270,28 @@ class RobotInfo(object):
         :type: float
         """
         self._health = health
+
+    @property
+    def points(self):
+        """
+        Gets the points of this RobotInfo.
+        the earned points.
+
+        :return: The points of this RobotInfo.
+        :rtype: float
+        """
+        return self._points
+
+    @points.setter
+    def points(self, points):
+        """
+        Sets the points of this RobotInfo.
+        the earned points.
+
+        :param points: The points of this RobotInfo.
+        :type: float
+        """
+        self._points = points
 
     def to_dict(self):
         """

@@ -196,7 +196,7 @@ class RobotConfiguration implements ArrayAccess
     protected $bullet_damage;
     
     /**
-      * $cannon_reloading_time How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n
+      * $cannon_reloading_time How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n
       * @var float
       */
     protected $cannon_reloading_time;
@@ -445,7 +445,7 @@ class RobotConfiguration implements ArrayAccess
   
     /**
      * Sets cannon_reloading_time
-     * @param float $cannon_reloading_time How many seconds the robot must wait before firing another missile. Min value: 1s. Max value: 6s. Deafault value: 1s.\n
+     * @param float $cannon_reloading_time How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.\n
      * @return $this
      */
     public function setCannonReloadingTime($cannon_reloading_time)

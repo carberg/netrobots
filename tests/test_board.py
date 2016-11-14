@@ -70,8 +70,6 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(robot1.name, 'GUNDAM1')
         self.assertEqual(robot1.is_dead, False)
         self.assertEqual(robot1.health, 100.0)
-        self.assertEqual(robot1.cannon_reloading_time, 0.0)
-        self.assertEqual(robot1.configuration.bullet_damage, 10.0)
         self.assertEqual(robot1.simulation_time, 0.0)
         self.assertEqual(robot1.time_tick, 1.0)
         self.assertEqual(robot1.real_time_tick, 0.1)
@@ -84,22 +82,6 @@ class BoardTestCase(unittest.TestCase):
         self.assertEqual(robot1.name, 'GUNDAM2')
         self.assertEqual(robot1.is_dead, True)
 
-        # create a Robot, requiring upper normalization
-        conf = self.create_default_robot_configuration("GUNDAM3")
-        conf.max_speed = conf.max_speed / 2.0
-        conf.max_hit_points = conf.max_hit_points / 2.0
-        robot1 = board.create_robot(conf)
-        self.assertEqual(robot1.is_dead, False)
-        self.assertAlmostEqual(robot1.health, conf.max_hit_points)
-        self.assertAlmostEqual(robot1.configuration.bullet_damage, 17.5, places=2)
-
-        # create a Robot, requiring downgrade
-        conf = self.create_default_robot_configuration("GUNDAM4")
-        conf.max_speed = conf.max_speed * 1.5
-        robot1 = board.create_robot(conf)
-        self.assertEqual(robot1.is_dead, False)
-        self.assertAlmostEqual(robot1.health, conf.max_hit_points)
-        self.assertAlmostEqual(robot1.configuration.bullet_damage, 7.0, places=2)
 
 
     def test_robot_acceleration_1(self):
@@ -234,14 +216,14 @@ class BoardTestCase(unittest.TestCase):
         robot1.pos_x = 250.0
         robot1.pos_y = 500.0
 
-        robot2.pos_x = 750.0
+        robot2.pos_x = 300.0
         robot2.pos_y = 500.0
 
         robot1.scan(0.0, 10.0)
-        self.assertAlmostEqual(robot1.scan_status.distance, 500.0)
+        self.assertAlmostEqual(robot1.scan_status.distance, 50.0)
 
         robot2.scan(180.0, 10.0)
-        self.assertAlmostEqual(robot2.scan_status.distance, 500.0)
+        self.assertAlmostEqual(robot2.scan_status.distance, 50.0)
 
     def test_distance(self):
         board = self.create_default_board()
@@ -279,9 +261,14 @@ class BoardTestCase(unittest.TestCase):
         self.assertAlmostEqual(robot2.health, 98.0)
         self.assertAlmostEqual(robot1.pos_x, 500.0, delta=2)
         self.assertAlmostEqual(robot2.pos_x, 500.0, delta=2)
-        self.assertAlmostEqual(robot1.distance(robot2), (2.0, 0.0))
+
+        distance, angle = robot1.distance(robot2)
+        self.assertAlmostEqual(distance, 2.0)
+        self.assertAlmostEqual(angle, 0.0)
+
         robot1.drive(180.0, 1.0)
         board.simulate_for_a_turn()
+
         self.assertAlmostEqual(robot1.distance(robot2)[0], 2.9444, places=2)
         self.assertAlmostEqual(robot1.distance(robot2)[1], 0.0)
 

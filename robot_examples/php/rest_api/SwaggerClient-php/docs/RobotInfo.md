@@ -12,6 +12,7 @@ Name | Type | Description | Notes
 **acceleration** | **float** |  | 
 **reloading_time** | **float** | 0 if the robot can fire immediately. | 
 **health** | **float** | 0 if the robot is dead. | 
+**points** | **float** | the earned points. | 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

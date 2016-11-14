@@ -13,6 +13,7 @@ in
       pyp.tornado
       pyp.six
       pyp.urllib3
+      pyp.certifi
       pkgs.elmPackages.elm
     ];
   }
