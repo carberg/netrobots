@@ -1,6 +1,6 @@
 
 # TODO not complete: this should be a Docker file installing an Elm compiler.
-# Up to date Elm is installed using Nix and `default.nix` file content.
+# Up to date Elm compilation is tested only using Nix and `default.nix` file content.
 
 FROM node:latest
 

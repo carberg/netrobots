@@ -1,38 +1,47 @@
 * Development Notes 
 
-The application is in development/alpha phase. There are still many TODO inside the source code files, and these notes.
-
-TODO rebase debug branch, update master, delete debug locally and on the remote server
+The application is in development/alpha phase. 
 
 TODO add in the README of GitHub a screenshoot of the game.
 
 TODO add a README.md file for each important directory
+** Development Environment
+Up to date Nix is used. The required packages are in `default.nix` files inside each directory.
 
-** TODO Game Server 
-TODO remove not used code
+TODO support also Docker
+
+** Game Server 
 TODO adapt the README of the application
 TODO create a standard Setupy.py file and study the Pip.py approach, because up to date development is done using nix
-*** TODO Test installation inside a Docker container
-***** TODO create Dockerfile
-***** TODO publish also the Dockerfile, as an alternative method respect NixOS
-***** TODO check the requirements.txt files
-*** TODO Game Server Stats
- Informs for each client of:
- - latency of each client communication
- - CPU load on the server (tested now and it is very very low)
 
- Latency tests: 40 ms verso google, 80 ms verso il server in germania (millisecodi) da casa mia.
+*** Versioning
+TODO use the version info in `doc/rest_api.yaml` for:
+- a client check if the REST API has the expected version
+- showing the server version in the home page
 
- TODO include note on latency and on division between simulation time and network communication time
+*** TODO Installation inside a Docker container
+A Docker containers with the game server can be used for:
+- creating reliable builds
+- isolating the server from the hosting system
 
-** TODO Board Viewer
-*** Why Elm
-- DOM model is efficiently update from Elm
-- a simple DOM creation code is created, and then Elm calculate automatically efficient incremental updates, because the creation code is declarative
-- static typing and assurance of code without run-time errors
-- reasonable compact JavaScript code is generated
-- competitive in performances (better) than JavaScript reactive libraries
+TODO up to date there is no Dockerfile and associated documentation
+TODO create the Dockerfile
+TODO document how to create a container and expose the game server ports to the external
 
+*** Network and Game Server Tuning 
+MAYBE move these notes on README file
+
+The tunings are:
+- CPU usage in case the game server host also the running clients. Otherwise CPU usage of the server alone is low enough
+- network latency: the time required for a client robot to receive the new board status, and sending a new command to the remote server
+ 
+The server can be configured for using a virtual simulation time, and a physical (real-world) network latency. The latency can be callibrated according the latency of the slowest client.
+
+TODO add tools for informing users of the latency of network, and if there are robots loosing some turn 
+TODO show the lost turn in the board game view
+TODO show in the board game view the server params
+
+** Game Board Viewer Design
 *** Server Client Communication
 Event-based synchro:
 - the server send high-level commands like:
@@ -46,16 +55,18 @@ Event-based synchro:
 - the client interpolate the robot and missile position, according the redraw time
 - if there is an event changing direction/acceleration and other info of interpolated objects, the client is informed from the server, so the client position calculations are always exact
 
-TODO complete the package description file of ELM at the end
-TODO remove not used code for the old Boand JS based
-
+Server sends events in chunks and streamed.
+*** Why Elm
+- DOM model is efficiently update from Elm
+- a simple DOM creation code is created, and then Elm calculate automatically efficient incremental updates, because the creation code is declarative
+- static typing and assurance of code without run-time errors
+- reasonable compact JavaScript code is generated
+- competitive in performances respect common JavaScript reactive libraries
 
 *** TODO Various Improvements
 
 TODO the home-page should include:
-TODO reference to the project home-page
 TODO REST-API documentation automatically generated
-DONE link to the board
 
 TODO send also complete stats about missing turns of the ROBOTS
 
@@ -63,6 +74,13 @@ DONE initial screen:
 - JS ask for buffering
 - JS show a SVG animation with the waiting of new data
 - JS start displaying the board
+
+TODO create an initial home-page for the project, the REST-API and so on
+TODO include stats with boardinfo about robots missing commands, and so on
+TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
+
+TODO port the code of the sniper from examples directory
+TODO remove old examples directory
 
 TODO sniper continue firing after the first stop
 TODO cannonReloadingTime is
@@ -75,10 +93,6 @@ TODO improve the streaming process:
 - TODO show at the center of the board the streaming message, and the remaining time
 
 TODO manage the correct real-time time-frame
-
-TODO create an initial home-page for the project, the REST-API and so on
-TODO include stats with boardinfo about robots missing commands, and so on
-TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
 
 MAYBE clip explosions, missiles and so on inside the board
 
@@ -103,7 +117,7 @@ TODO show the characteristics of robots on the board
 TODO write a better Sniper code
 TODO make sure that killed robots or robots with errors does not steal all the resources
 
-** TODO Client Robots
+** Client Robots
 TODO when the server send an error message into http the Python client library start an infinite loop and uses 100% of CPU resources
 
 *** Haskell Robot

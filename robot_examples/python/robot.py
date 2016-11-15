@@ -20,9 +20,6 @@
 Different types of robots that can be launched from the command line.
 """
 
-# TODO import here the code of various robots
-# TODO robots are started specifying some parameter from the command line
-
 from rest_api.swagger_client.models import *
 from rest_api.swagger_client import *
 

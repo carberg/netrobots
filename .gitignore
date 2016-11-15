@@ -2,5 +2,7 @@
 *.pyc
 /env/
 *~
-elm/elm-stuff/
+/board_viewer_on_client/elm-stuff/
+/demo_scripts/kill-server.sh
+/demo_scripts/netrobots.log
 
