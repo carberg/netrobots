@@ -5,17 +5,6 @@ Fighting robots controlled by code.
 
 Up to date it is in alpha/development state. See `DEV.org` file for more info on application design, and missing features.
 
-REST API
-========
-
-Robots are controlled by a REST API, so they can be written in any programming language, and fights between remote teams are supported.
-
-The API is described in an human readable Swagger format in `doc/rest_api.yaml` file.
-
-Code for different programming languages, is derived from this file, using the tools in `dev_scripts`.
-
-In the `robot_examples` directory there are demo robots for different programming languages.
-
 Installation
 ============
 
@@ -24,22 +13,17 @@ See `default.nix` or `Dockerfile` for a description of the required packages.
 Starting
 ========
 
-Using Docker
-------------
-
-TODO not yet completed/tested
-
-Using Nix
----------
+Unix
+----
 
 A demo server with demo clients can be launched in this way:
 
     cd demo_scripts
-    nix-shell ../default.nix --run "./run-demo.sh"
+    ./run-demo.sh
 
-The server can be launched in this way:
+The server can be launched manually using this params:
 
-    nix-shell default.nix --run "python run.py"
+    python run.py
 
     run.py options:
 
@@ -53,10 +37,34 @@ The server can be launched in this way:
 
 See `demo_scripts/run-demo.sh` for an example of how launching demo clients.
 
+Using Docker
+------------
+
+TODO not yet completed/tested
+
+Using Nix
+---------
+
+`default.nix` contains the required packages for the running environment.
+
+The demo are launched in this way:
+
+    cd demo_scripts
+    nix-shell ../default.nix --run "./run-demo.sh"
+
+The server can be launched in this way, from the base directory: 
+
+    nix-shell default.nix --run "python run.py"
+
 Robots Coding Instructions
 ==========================
 
-Robots can be written using any programming language, because they communicate with the server using REST API. More details on `doc/rest_api.yaml` and `robot_examples` directory.
+Robots are controlled by a REST API, so 
+
+* they can be written in any programming language
+* there can be remote robots 
+
+The API is described in an human readable Swagger format in `doc/rest_api.yaml` file. Code for different programming languages, is derived from this file, using the tools in `dev_scripts`. In the `robot_examples` directory there are demo robots for different programming languages.
 
 Project Development
 ===================

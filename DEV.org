@@ -1,10 +1,13 @@
 * Development Notes 
 
-The application is in development/alpha phase. 
+IMPORTANT: The application is in development/alpha phase. 
+** Design Overview
+The REST API for controlling the Robots in the arena, is written in Swagger YAML format, and then low-level code is generated for each supported programming language. See `doc/rest_api.yaml` and `dev_scripts/` directory.
 
-TODO add in the README of GitHub a screenshoot of the game.
+The server is written in Python using the Tornado HTTP server/framework. See `server` directory.
 
-TODO add a README.md file for each important directory
+The board viewer is written in Elm, and then Java Script code is generated. The board viewer graphics is in SVG.
+
 ** Development Environment
 Up to date Nix is used. The required packages are in `default.nix` files inside each directory.
 
@@ -146,4 +149,6 @@ The method
 make an estimate of the robot characteristics, and it filter out Robots that are too much strong.
 
 With time and experience, this method should be improved, for avoiding Robot with unfair advantages.
+* WebSite
+TODO add in the README of GitHub a screenshoot of the game.
 
