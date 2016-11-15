@@ -54,7 +54,9 @@ class Board:
         self._network_latency = network_latency
         self._simulation_tick = self.get_optimal_simulation_tick()
         self._next_robot_id = 0
-        self._robot_color = ['black', 'blue', 'green', 'yellow', 'red', 'gray']
+        self._robot_color = [
+            'black', 'blue', 'green', 'red', 'gray', 'BlueViolet', 'Chocolate'
+            , 'DarkCyan', 'DarkGreen', 'Khaki', 'Magenta', 'MediumSeaGreen', 'YellowGreen']
 
         self._radar = {}
 

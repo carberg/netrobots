@@ -2729,271 +2729,1026 @@ var _elm_lang$core$Platform_Sub$none = _elm_lang$core$Platform_Sub$batch(
 var _elm_lang$core$Platform_Sub$map = _elm_lang$core$Native_Platform.map;
 var _elm_lang$core$Platform_Sub$Sub = {ctor: 'Sub'};
 
-var _elm_lang$animation_frame$Native_AnimationFrame = function()
+//import Native.List //
+
+var _elm_lang$core$Native_Array = function() {
+
+// A RRB-Tree has two distinct data types.
+// Leaf -> "height"  is always 0
+//         "table"   is an array of elements
+// Node -> "height"  is always greater than 0
+//         "table"   is an array of child nodes
+//         "lengths" is an array of accumulated lengths of the child nodes
+
+// M is the maximal table size. 32 seems fast. E is the allowed increase
+// of search steps when concatting to find an index. Lower values will
+// decrease balancing, but will increase search steps.
+var M = 32;
+var E = 2;
+
+// An empty array.
+var empty = {
+	ctor: '_Array',
+	height: 0,
+	table: []
+};
+
+
+function get(i, array)
 {
+	if (i < 0 || i >= length(array))
+	{
+		throw new Error(
+			'Index ' + i + ' is out of range. Check the length of ' +
+			'your array first or use getMaybe or getWithDefault.');
+	}
+	return unsafeGet(i, array);
+}
 
-var hasStartTime =
-	window.performance &&
-	window.performance.timing &&
-	window.performance.timing.navigationStart;
 
-var navStart = hasStartTime
-	? window.performance.timing.navigationStart
-	: Date.now();
-
-var rAF = _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
+function unsafeGet(i, array)
 {
-	var id = requestAnimationFrame(function(time) {
-		var timeNow = time
-			? (time > navStart ? time : time + navStart)
-			: Date.now();
+	for (var x = array.height; x > 0; x--)
+	{
+		var slot = i >> (x * 5);
+		while (array.lengths[slot] <= i)
+		{
+			slot++;
+		}
+		if (slot > 0)
+		{
+			i -= array.lengths[slot - 1];
+		}
+		array = array.table[slot];
+	}
+	return array.table[i];
+}
 
-		callback(_elm_lang$core$Native_Scheduler.succeed(timeNow));
-	});
 
-	return function() {
-		cancelAnimationFrame(id);
+// Sets the value at the index i. Only the nodes leading to i will get
+// copied and updated.
+function set(i, item, array)
+{
+	if (i < 0 || length(array) <= i)
+	{
+		return array;
+	}
+	return unsafeSet(i, item, array);
+}
+
+
+function unsafeSet(i, item, array)
+{
+	array = nodeCopy(array);
+
+	if (array.height === 0)
+	{
+		array.table[i] = item;
+	}
+	else
+	{
+		var slot = getSlot(i, array);
+		if (slot > 0)
+		{
+			i -= array.lengths[slot - 1];
+		}
+		array.table[slot] = unsafeSet(i, item, array.table[slot]);
+	}
+	return array;
+}
+
+
+function initialize(len, f)
+{
+	if (len <= 0)
+	{
+		return empty;
+	}
+	var h = Math.floor( Math.log(len) / Math.log(M) );
+	return initialize_(f, h, 0, len);
+}
+
+function initialize_(f, h, from, to)
+{
+	if (h === 0)
+	{
+		var table = new Array((to - from) % (M + 1));
+		for (var i = 0; i < table.length; i++)
+		{
+		  table[i] = f(from + i);
+		}
+		return {
+			ctor: '_Array',
+			height: 0,
+			table: table
+		};
+	}
+
+	var step = Math.pow(M, h);
+	var table = new Array(Math.ceil((to - from) / step));
+	var lengths = new Array(table.length);
+	for (var i = 0; i < table.length; i++)
+	{
+		table[i] = initialize_(f, h - 1, from + (i * step), Math.min(from + ((i + 1) * step), to));
+		lengths[i] = length(table[i]) + (i > 0 ? lengths[i-1] : 0);
+	}
+	return {
+		ctor: '_Array',
+		height: h,
+		table: table,
+		lengths: lengths
 	};
-});
+}
+
+function fromList(list)
+{
+	if (list.ctor === '[]')
+	{
+		return empty;
+	}
+
+	// Allocate M sized blocks (table) and write list elements to it.
+	var table = new Array(M);
+	var nodes = [];
+	var i = 0;
+
+	while (list.ctor !== '[]')
+	{
+		table[i] = list._0;
+		list = list._1;
+		i++;
+
+		// table is full, so we can push a leaf containing it into the
+		// next node.
+		if (i === M)
+		{
+			var leaf = {
+				ctor: '_Array',
+				height: 0,
+				table: table
+			};
+			fromListPush(leaf, nodes);
+			table = new Array(M);
+			i = 0;
+		}
+	}
+
+	// Maybe there is something left on the table.
+	if (i > 0)
+	{
+		var leaf = {
+			ctor: '_Array',
+			height: 0,
+			table: table.splice(0, i)
+		};
+		fromListPush(leaf, nodes);
+	}
+
+	// Go through all of the nodes and eventually push them into higher nodes.
+	for (var h = 0; h < nodes.length - 1; h++)
+	{
+		if (nodes[h].table.length > 0)
+		{
+			fromListPush(nodes[h], nodes);
+		}
+	}
+
+	var head = nodes[nodes.length - 1];
+	if (head.height > 0 && head.table.length === 1)
+	{
+		return head.table[0];
+	}
+	else
+	{
+		return head;
+	}
+}
+
+// Push a node into a higher node as a child.
+function fromListPush(toPush, nodes)
+{
+	var h = toPush.height;
+
+	// Maybe the node on this height does not exist.
+	if (nodes.length === h)
+	{
+		var node = {
+			ctor: '_Array',
+			height: h + 1,
+			table: [],
+			lengths: []
+		};
+		nodes.push(node);
+	}
+
+	nodes[h].table.push(toPush);
+	var len = length(toPush);
+	if (nodes[h].lengths.length > 0)
+	{
+		len += nodes[h].lengths[nodes[h].lengths.length - 1];
+	}
+	nodes[h].lengths.push(len);
+
+	if (nodes[h].table.length === M)
+	{
+		fromListPush(nodes[h], nodes);
+		nodes[h] = {
+			ctor: '_Array',
+			height: h + 1,
+			table: [],
+			lengths: []
+		};
+	}
+}
+
+// Pushes an item via push_ to the bottom right of a tree.
+function push(item, a)
+{
+	var pushed = push_(item, a);
+	if (pushed !== null)
+	{
+		return pushed;
+	}
+
+	var newTree = create(item, a.height);
+	return siblise(a, newTree);
+}
+
+// Recursively tries to push an item to the bottom-right most
+// tree possible. If there is no space left for the item,
+// null will be returned.
+function push_(item, a)
+{
+	// Handle resursion stop at leaf level.
+	if (a.height === 0)
+	{
+		if (a.table.length < M)
+		{
+			var newA = {
+				ctor: '_Array',
+				height: 0,
+				table: a.table.slice()
+			};
+			newA.table.push(item);
+			return newA;
+		}
+		else
+		{
+		  return null;
+		}
+	}
+
+	// Recursively push
+	var pushed = push_(item, botRight(a));
+
+	// There was space in the bottom right tree, so the slot will
+	// be updated.
+	if (pushed !== null)
+	{
+		var newA = nodeCopy(a);
+		newA.table[newA.table.length - 1] = pushed;
+		newA.lengths[newA.lengths.length - 1]++;
+		return newA;
+	}
+
+	// When there was no space left, check if there is space left
+	// for a new slot with a tree which contains only the item
+	// at the bottom.
+	if (a.table.length < M)
+	{
+		var newSlot = create(item, a.height - 1);
+		var newA = nodeCopy(a);
+		newA.table.push(newSlot);
+		newA.lengths.push(newA.lengths[newA.lengths.length - 1] + length(newSlot));
+		return newA;
+	}
+	else
+	{
+		return null;
+	}
+}
+
+// Converts an array into a list of elements.
+function toList(a)
+{
+	return toList_(_elm_lang$core$Native_List.Nil, a);
+}
+
+function toList_(list, a)
+{
+	for (var i = a.table.length - 1; i >= 0; i--)
+	{
+		list =
+			a.height === 0
+				? _elm_lang$core$Native_List.Cons(a.table[i], list)
+				: toList_(list, a.table[i]);
+	}
+	return list;
+}
+
+// Maps a function over the elements of an array.
+function map(f, a)
+{
+	var newA = {
+		ctor: '_Array',
+		height: a.height,
+		table: new Array(a.table.length)
+	};
+	if (a.height > 0)
+	{
+		newA.lengths = a.lengths;
+	}
+	for (var i = 0; i < a.table.length; i++)
+	{
+		newA.table[i] =
+			a.height === 0
+				? f(a.table[i])
+				: map(f, a.table[i]);
+	}
+	return newA;
+}
+
+// Maps a function over the elements with their index as first argument.
+function indexedMap(f, a)
+{
+	return indexedMap_(f, a, 0);
+}
+
+function indexedMap_(f, a, from)
+{
+	var newA = {
+		ctor: '_Array',
+		height: a.height,
+		table: new Array(a.table.length)
+	};
+	if (a.height > 0)
+	{
+		newA.lengths = a.lengths;
+	}
+	for (var i = 0; i < a.table.length; i++)
+	{
+		newA.table[i] =
+			a.height === 0
+				? A2(f, from + i, a.table[i])
+				: indexedMap_(f, a.table[i], i == 0 ? from : from + a.lengths[i - 1]);
+	}
+	return newA;
+}
+
+function foldl(f, b, a)
+{
+	if (a.height === 0)
+	{
+		for (var i = 0; i < a.table.length; i++)
+		{
+			b = A2(f, a.table[i], b);
+		}
+	}
+	else
+	{
+		for (var i = 0; i < a.table.length; i++)
+		{
+			b = foldl(f, b, a.table[i]);
+		}
+	}
+	return b;
+}
+
+function foldr(f, b, a)
+{
+	if (a.height === 0)
+	{
+		for (var i = a.table.length; i--; )
+		{
+			b = A2(f, a.table[i], b);
+		}
+	}
+	else
+	{
+		for (var i = a.table.length; i--; )
+		{
+			b = foldr(f, b, a.table[i]);
+		}
+	}
+	return b;
+}
+
+// TODO: currently, it slices the right, then the left. This can be
+// optimized.
+function slice(from, to, a)
+{
+	if (from < 0)
+	{
+		from += length(a);
+	}
+	if (to < 0)
+	{
+		to += length(a);
+	}
+	return sliceLeft(from, sliceRight(to, a));
+}
+
+function sliceRight(to, a)
+{
+	if (to === length(a))
+	{
+		return a;
+	}
+
+	// Handle leaf level.
+	if (a.height === 0)
+	{
+		var newA = { ctor:'_Array', height:0 };
+		newA.table = a.table.slice(0, to);
+		return newA;
+	}
+
+	// Slice the right recursively.
+	var right = getSlot(to, a);
+	var sliced = sliceRight(to - (right > 0 ? a.lengths[right - 1] : 0), a.table[right]);
+
+	// Maybe the a node is not even needed, as sliced contains the whole slice.
+	if (right === 0)
+	{
+		return sliced;
+	}
+
+	// Create new node.
+	var newA = {
+		ctor: '_Array',
+		height: a.height,
+		table: a.table.slice(0, right),
+		lengths: a.lengths.slice(0, right)
+	};
+	if (sliced.table.length > 0)
+	{
+		newA.table[right] = sliced;
+		newA.lengths[right] = length(sliced) + (right > 0 ? newA.lengths[right - 1] : 0);
+	}
+	return newA;
+}
+
+function sliceLeft(from, a)
+{
+	if (from === 0)
+	{
+		return a;
+	}
+
+	// Handle leaf level.
+	if (a.height === 0)
+	{
+		var newA = { ctor:'_Array', height:0 };
+		newA.table = a.table.slice(from, a.table.length + 1);
+		return newA;
+	}
+
+	// Slice the left recursively.
+	var left = getSlot(from, a);
+	var sliced = sliceLeft(from - (left > 0 ? a.lengths[left - 1] : 0), a.table[left]);
+
+	// Maybe the a node is not even needed, as sliced contains the whole slice.
+	if (left === a.table.length - 1)
+	{
+		return sliced;
+	}
+
+	// Create new node.
+	var newA = {
+		ctor: '_Array',
+		height: a.height,
+		table: a.table.slice(left, a.table.length + 1),
+		lengths: new Array(a.table.length - left)
+	};
+	newA.table[0] = sliced;
+	var len = 0;
+	for (var i = 0; i < newA.table.length; i++)
+	{
+		len += length(newA.table[i]);
+		newA.lengths[i] = len;
+	}
+
+	return newA;
+}
+
+// Appends two trees.
+function append(a,b)
+{
+	if (a.table.length === 0)
+	{
+		return b;
+	}
+	if (b.table.length === 0)
+	{
+		return a;
+	}
+
+	var c = append_(a, b);
+
+	// Check if both nodes can be crunshed together.
+	if (c[0].table.length + c[1].table.length <= M)
+	{
+		if (c[0].table.length === 0)
+		{
+			return c[1];
+		}
+		if (c[1].table.length === 0)
+		{
+			return c[0];
+		}
+
+		// Adjust .table and .lengths
+		c[0].table = c[0].table.concat(c[1].table);
+		if (c[0].height > 0)
+		{
+			var len = length(c[0]);
+			for (var i = 0; i < c[1].lengths.length; i++)
+			{
+				c[1].lengths[i] += len;
+			}
+			c[0].lengths = c[0].lengths.concat(c[1].lengths);
+		}
+
+		return c[0];
+	}
+
+	if (c[0].height > 0)
+	{
+		var toRemove = calcToRemove(a, b);
+		if (toRemove > E)
+		{
+			c = shuffle(c[0], c[1], toRemove);
+		}
+	}
+
+	return siblise(c[0], c[1]);
+}
+
+// Returns an array of two nodes; right and left. One node _may_ be empty.
+function append_(a, b)
+{
+	if (a.height === 0 && b.height === 0)
+	{
+		return [a, b];
+	}
+
+	if (a.height !== 1 || b.height !== 1)
+	{
+		if (a.height === b.height)
+		{
+			a = nodeCopy(a);
+			b = nodeCopy(b);
+			var appended = append_(botRight(a), botLeft(b));
+
+			insertRight(a, appended[1]);
+			insertLeft(b, appended[0]);
+		}
+		else if (a.height > b.height)
+		{
+			a = nodeCopy(a);
+			var appended = append_(botRight(a), b);
+
+			insertRight(a, appended[0]);
+			b = parentise(appended[1], appended[1].height + 1);
+		}
+		else
+		{
+			b = nodeCopy(b);
+			var appended = append_(a, botLeft(b));
+
+			var left = appended[0].table.length === 0 ? 0 : 1;
+			var right = left === 0 ? 1 : 0;
+			insertLeft(b, appended[left]);
+			a = parentise(appended[right], appended[right].height + 1);
+		}
+	}
+
+	// Check if balancing is needed and return based on that.
+	if (a.table.length === 0 || b.table.length === 0)
+	{
+		return [a, b];
+	}
+
+	var toRemove = calcToRemove(a, b);
+	if (toRemove <= E)
+	{
+		return [a, b];
+	}
+	return shuffle(a, b, toRemove);
+}
+
+// Helperfunctions for append_. Replaces a child node at the side of the parent.
+function insertRight(parent, node)
+{
+	var index = parent.table.length - 1;
+	parent.table[index] = node;
+	parent.lengths[index] = length(node);
+	parent.lengths[index] += index > 0 ? parent.lengths[index - 1] : 0;
+}
+
+function insertLeft(parent, node)
+{
+	if (node.table.length > 0)
+	{
+		parent.table[0] = node;
+		parent.lengths[0] = length(node);
+
+		var len = length(parent.table[0]);
+		for (var i = 1; i < parent.lengths.length; i++)
+		{
+			len += length(parent.table[i]);
+			parent.lengths[i] = len;
+		}
+	}
+	else
+	{
+		parent.table.shift();
+		for (var i = 1; i < parent.lengths.length; i++)
+		{
+			parent.lengths[i] = parent.lengths[i] - parent.lengths[0];
+		}
+		parent.lengths.shift();
+	}
+}
+
+// Returns the extra search steps for E. Refer to the paper.
+function calcToRemove(a, b)
+{
+	var subLengths = 0;
+	for (var i = 0; i < a.table.length; i++)
+	{
+		subLengths += a.table[i].table.length;
+	}
+	for (var i = 0; i < b.table.length; i++)
+	{
+		subLengths += b.table[i].table.length;
+	}
+
+	var toRemove = a.table.length + b.table.length;
+	return toRemove - (Math.floor((subLengths - 1) / M) + 1);
+}
+
+// get2, set2 and saveSlot are helpers for accessing elements over two arrays.
+function get2(a, b, index)
+{
+	return index < a.length
+		? a[index]
+		: b[index - a.length];
+}
+
+function set2(a, b, index, value)
+{
+	if (index < a.length)
+	{
+		a[index] = value;
+	}
+	else
+	{
+		b[index - a.length] = value;
+	}
+}
+
+function saveSlot(a, b, index, slot)
+{
+	set2(a.table, b.table, index, slot);
+
+	var l = (index === 0 || index === a.lengths.length)
+		? 0
+		: get2(a.lengths, a.lengths, index - 1);
+
+	set2(a.lengths, b.lengths, index, l + length(slot));
+}
+
+// Creates a node or leaf with a given length at their arrays for perfomance.
+// Is only used by shuffle.
+function createNode(h, length)
+{
+	if (length < 0)
+	{
+		length = 0;
+	}
+	var a = {
+		ctor: '_Array',
+		height: h,
+		table: new Array(length)
+	};
+	if (h > 0)
+	{
+		a.lengths = new Array(length);
+	}
+	return a;
+}
+
+// Returns an array of two balanced nodes.
+function shuffle(a, b, toRemove)
+{
+	var newA = createNode(a.height, Math.min(M, a.table.length + b.table.length - toRemove));
+	var newB = createNode(a.height, newA.table.length - (a.table.length + b.table.length - toRemove));
+
+	// Skip the slots with size M. More precise: copy the slot references
+	// to the new node
+	var read = 0;
+	while (get2(a.table, b.table, read).table.length % M === 0)
+	{
+		set2(newA.table, newB.table, read, get2(a.table, b.table, read));
+		set2(newA.lengths, newB.lengths, read, get2(a.lengths, b.lengths, read));
+		read++;
+	}
+
+	// Pulling items from left to right, caching in a slot before writing
+	// it into the new nodes.
+	var write = read;
+	var slot = new createNode(a.height - 1, 0);
+	var from = 0;
+
+	// If the current slot is still containing data, then there will be at
+	// least one more write, so we do not break this loop yet.
+	while (read - write - (slot.table.length > 0 ? 1 : 0) < toRemove)
+	{
+		// Find out the max possible items for copying.
+		var source = get2(a.table, b.table, read);
+		var to = Math.min(M - slot.table.length, source.table.length);
+
+		// Copy and adjust size table.
+		slot.table = slot.table.concat(source.table.slice(from, to));
+		if (slot.height > 0)
+		{
+			var len = slot.lengths.length;
+			for (var i = len; i < len + to - from; i++)
+			{
+				slot.lengths[i] = length(slot.table[i]);
+				slot.lengths[i] += (i > 0 ? slot.lengths[i - 1] : 0);
+			}
+		}
+
+		from += to;
+
+		// Only proceed to next slots[i] if the current one was
+		// fully copied.
+		if (source.table.length <= to)
+		{
+			read++; from = 0;
+		}
+
+		// Only create a new slot if the current one is filled up.
+		if (slot.table.length === M)
+		{
+			saveSlot(newA, newB, write, slot);
+			slot = createNode(a.height - 1, 0);
+			write++;
+		}
+	}
+
+	// Cleanup after the loop. Copy the last slot into the new nodes.
+	if (slot.table.length > 0)
+	{
+		saveSlot(newA, newB, write, slot);
+		write++;
+	}
+
+	// Shift the untouched slots to the left
+	while (read < a.table.length + b.table.length )
+	{
+		saveSlot(newA, newB, write, get2(a.table, b.table, read));
+		read++;
+		write++;
+	}
+
+	return [newA, newB];
+}
+
+// Navigation functions
+function botRight(a)
+{
+	return a.table[a.table.length - 1];
+}
+function botLeft(a)
+{
+	return a.table[0];
+}
+
+// Copies a node for updating. Note that you should not use this if
+// only updating only one of "table" or "lengths" for performance reasons.
+function nodeCopy(a)
+{
+	var newA = {
+		ctor: '_Array',
+		height: a.height,
+		table: a.table.slice()
+	};
+	if (a.height > 0)
+	{
+		newA.lengths = a.lengths.slice();
+	}
+	return newA;
+}
+
+// Returns how many items are in the tree.
+function length(array)
+{
+	if (array.height === 0)
+	{
+		return array.table.length;
+	}
+	else
+	{
+		return array.lengths[array.lengths.length - 1];
+	}
+}
+
+// Calculates in which slot of "table" the item probably is, then
+// find the exact slot via forward searching in  "lengths". Returns the index.
+function getSlot(i, a)
+{
+	var slot = i >> (5 * a.height);
+	while (a.lengths[slot] <= i)
+	{
+		slot++;
+	}
+	return slot;
+}
+
+// Recursively creates a tree with a given height containing
+// only the given item.
+function create(item, h)
+{
+	if (h === 0)
+	{
+		return {
+			ctor: '_Array',
+			height: 0,
+			table: [item]
+		};
+	}
+	return {
+		ctor: '_Array',
+		height: h,
+		table: [create(item, h - 1)],
+		lengths: [1]
+	};
+}
+
+// Recursively creates a tree that contains the given tree.
+function parentise(tree, h)
+{
+	if (h === tree.height)
+	{
+		return tree;
+	}
+
+	return {
+		ctor: '_Array',
+		height: h,
+		table: [parentise(tree, h - 1)],
+		lengths: [length(tree)]
+	};
+}
+
+// Emphasizes blood brotherhood beneath two trees.
+function siblise(a, b)
+{
+	return {
+		ctor: '_Array',
+		height: a.height + 1,
+		table: [a, b],
+		lengths: [length(a), length(a) + length(b)]
+	};
+}
+
+function toJSArray(a)
+{
+	var jsArray = new Array(length(a));
+	toJSArray_(jsArray, 0, a);
+	return jsArray;
+}
+
+function toJSArray_(jsArray, i, a)
+{
+	for (var t = 0; t < a.table.length; t++)
+	{
+		if (a.height === 0)
+		{
+			jsArray[i + t] = a.table[t];
+		}
+		else
+		{
+			var inc = t === 0 ? 0 : a.lengths[t - 1];
+			toJSArray_(jsArray, i + inc, a.table[t]);
+		}
+	}
+}
+
+function fromJSArray(jsArray)
+{
+	if (jsArray.length === 0)
+	{
+		return empty;
+	}
+	var h = Math.floor(Math.log(jsArray.length) / Math.log(M));
+	return fromJSArray_(jsArray, h, 0, jsArray.length);
+}
+
+function fromJSArray_(jsArray, h, from, to)
+{
+	if (h === 0)
+	{
+		return {
+			ctor: '_Array',
+			height: 0,
+			table: jsArray.slice(from, to)
+		};
+	}
+
+	var step = Math.pow(M, h);
+	var table = new Array(Math.ceil((to - from) / step));
+	var lengths = new Array(table.length);
+	for (var i = 0; i < table.length; i++)
+	{
+		table[i] = fromJSArray_(jsArray, h - 1, from + (i * step), Math.min(from + ((i + 1) * step), to));
+		lengths[i] = length(table[i]) + (i > 0 ? lengths[i - 1] : 0);
+	}
+	return {
+		ctor: '_Array',
+		height: h,
+		table: table,
+		lengths: lengths
+	};
+}
 
 return {
-	rAF: rAF
+	empty: empty,
+	fromList: fromList,
+	toList: toList,
+	initialize: F2(initialize),
+	append: F2(append),
+	push: F2(push),
+	slice: F3(slice),
+	get: F2(get),
+	set: F3(set),
+	map: F2(map),
+	indexedMap: F2(indexedMap),
+	foldl: F3(foldl),
+	foldr: F3(foldr),
+	length: length,
+
+	toJSArray: toJSArray,
+	fromJSArray: fromJSArray
 };
 
 }();
-
-var _elm_lang$core$Task$onError = _elm_lang$core$Native_Scheduler.onError;
-var _elm_lang$core$Task$andThen = _elm_lang$core$Native_Scheduler.andThen;
-var _elm_lang$core$Task$spawnCmd = F2(
-	function (router, _p0) {
-		var _p1 = _p0;
-		return _elm_lang$core$Native_Scheduler.spawn(
-			A2(
-				_elm_lang$core$Task$andThen,
-				_p1._0,
-				_elm_lang$core$Platform$sendToApp(router)));
-	});
-var _elm_lang$core$Task$fail = _elm_lang$core$Native_Scheduler.fail;
-var _elm_lang$core$Task$mapError = F2(
-	function (f, task) {
-		return A2(
-			_elm_lang$core$Task$onError,
-			task,
-			function (err) {
-				return _elm_lang$core$Task$fail(
-					f(err));
-			});
-	});
-var _elm_lang$core$Task$succeed = _elm_lang$core$Native_Scheduler.succeed;
-var _elm_lang$core$Task$map = F2(
-	function (func, taskA) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			taskA,
-			function (a) {
-				return _elm_lang$core$Task$succeed(
-					func(a));
-			});
-	});
-var _elm_lang$core$Task$map2 = F3(
-	function (func, taskA, taskB) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			taskA,
-			function (a) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					taskB,
-					function (b) {
-						return _elm_lang$core$Task$succeed(
-							A2(func, a, b));
-					});
-			});
-	});
-var _elm_lang$core$Task$map3 = F4(
-	function (func, taskA, taskB, taskC) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			taskA,
-			function (a) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					taskB,
-					function (b) {
-						return A2(
-							_elm_lang$core$Task$andThen,
-							taskC,
-							function (c) {
-								return _elm_lang$core$Task$succeed(
-									A3(func, a, b, c));
-							});
-					});
-			});
-	});
-var _elm_lang$core$Task$map4 = F5(
-	function (func, taskA, taskB, taskC, taskD) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			taskA,
-			function (a) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					taskB,
-					function (b) {
-						return A2(
-							_elm_lang$core$Task$andThen,
-							taskC,
-							function (c) {
-								return A2(
-									_elm_lang$core$Task$andThen,
-									taskD,
-									function (d) {
-										return _elm_lang$core$Task$succeed(
-											A4(func, a, b, c, d));
-									});
-							});
-					});
-			});
-	});
-var _elm_lang$core$Task$map5 = F6(
-	function (func, taskA, taskB, taskC, taskD, taskE) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			taskA,
-			function (a) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					taskB,
-					function (b) {
-						return A2(
-							_elm_lang$core$Task$andThen,
-							taskC,
-							function (c) {
-								return A2(
-									_elm_lang$core$Task$andThen,
-									taskD,
-									function (d) {
-										return A2(
-											_elm_lang$core$Task$andThen,
-											taskE,
-											function (e) {
-												return _elm_lang$core$Task$succeed(
-													A5(func, a, b, c, d, e));
-											});
-									});
-							});
-					});
-			});
-	});
-var _elm_lang$core$Task$andMap = F2(
-	function (taskFunc, taskValue) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			taskFunc,
-			function (func) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					taskValue,
-					function (value) {
-						return _elm_lang$core$Task$succeed(
-							func(value));
-					});
-			});
-	});
-var _elm_lang$core$Task$sequence = function (tasks) {
-	var _p2 = tasks;
-	if (_p2.ctor === '[]') {
-		return _elm_lang$core$Task$succeed(
-			_elm_lang$core$Native_List.fromArray(
-				[]));
-	} else {
-		return A3(
-			_elm_lang$core$Task$map2,
-			F2(
-				function (x, y) {
-					return A2(_elm_lang$core$List_ops['::'], x, y);
-				}),
-			_p2._0,
-			_elm_lang$core$Task$sequence(_p2._1));
-	}
+var _elm_lang$core$Array$append = _elm_lang$core$Native_Array.append;
+var _elm_lang$core$Array$length = _elm_lang$core$Native_Array.length;
+var _elm_lang$core$Array$isEmpty = function (array) {
+	return _elm_lang$core$Native_Utils.eq(
+		_elm_lang$core$Array$length(array),
+		0);
 };
-var _elm_lang$core$Task$onEffects = F3(
-	function (router, commands, state) {
+var _elm_lang$core$Array$slice = _elm_lang$core$Native_Array.slice;
+var _elm_lang$core$Array$set = _elm_lang$core$Native_Array.set;
+var _elm_lang$core$Array$get = F2(
+	function (i, array) {
+		return ((_elm_lang$core$Native_Utils.cmp(0, i) < 1) && (_elm_lang$core$Native_Utils.cmp(
+			i,
+			_elm_lang$core$Native_Array.length(array)) < 0)) ? _elm_lang$core$Maybe$Just(
+			A2(_elm_lang$core$Native_Array.get, i, array)) : _elm_lang$core$Maybe$Nothing;
+	});
+var _elm_lang$core$Array$push = _elm_lang$core$Native_Array.push;
+var _elm_lang$core$Array$empty = _elm_lang$core$Native_Array.empty;
+var _elm_lang$core$Array$filter = F2(
+	function (isOkay, arr) {
+		var update = F2(
+			function (x, xs) {
+				return isOkay(x) ? A2(_elm_lang$core$Native_Array.push, x, xs) : xs;
+			});
+		return A3(_elm_lang$core$Native_Array.foldl, update, _elm_lang$core$Native_Array.empty, arr);
+	});
+var _elm_lang$core$Array$foldr = _elm_lang$core$Native_Array.foldr;
+var _elm_lang$core$Array$foldl = _elm_lang$core$Native_Array.foldl;
+var _elm_lang$core$Array$indexedMap = _elm_lang$core$Native_Array.indexedMap;
+var _elm_lang$core$Array$map = _elm_lang$core$Native_Array.map;
+var _elm_lang$core$Array$toIndexedList = function (array) {
+	return A3(
+		_elm_lang$core$List$map2,
+		F2(
+			function (v0, v1) {
+				return {ctor: '_Tuple2', _0: v0, _1: v1};
+			}),
+		_elm_lang$core$Native_List.range(
+			0,
+			_elm_lang$core$Native_Array.length(array) - 1),
+		_elm_lang$core$Native_Array.toList(array));
+};
+var _elm_lang$core$Array$toList = _elm_lang$core$Native_Array.toList;
+var _elm_lang$core$Array$fromList = _elm_lang$core$Native_Array.fromList;
+var _elm_lang$core$Array$initialize = _elm_lang$core$Native_Array.initialize;
+var _elm_lang$core$Array$repeat = F2(
+	function (n, e) {
 		return A2(
-			_elm_lang$core$Task$map,
-			function (_p3) {
-				return {ctor: '_Tuple0'};
-			},
-			_elm_lang$core$Task$sequence(
-				A2(
-					_elm_lang$core$List$map,
-					_elm_lang$core$Task$spawnCmd(router),
-					commands)));
+			_elm_lang$core$Array$initialize,
+			n,
+			_elm_lang$core$Basics$always(e));
 	});
-var _elm_lang$core$Task$toMaybe = function (task) {
-	return A2(
-		_elm_lang$core$Task$onError,
-		A2(_elm_lang$core$Task$map, _elm_lang$core$Maybe$Just, task),
-		function (_p4) {
-			return _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
-		});
-};
-var _elm_lang$core$Task$fromMaybe = F2(
-	function ($default, maybe) {
-		var _p5 = maybe;
-		if (_p5.ctor === 'Just') {
-			return _elm_lang$core$Task$succeed(_p5._0);
-		} else {
-			return _elm_lang$core$Task$fail($default);
-		}
-	});
-var _elm_lang$core$Task$toResult = function (task) {
-	return A2(
-		_elm_lang$core$Task$onError,
-		A2(_elm_lang$core$Task$map, _elm_lang$core$Result$Ok, task),
-		function (msg) {
-			return _elm_lang$core$Task$succeed(
-				_elm_lang$core$Result$Err(msg));
-		});
-};
-var _elm_lang$core$Task$fromResult = function (result) {
-	var _p6 = result;
-	if (_p6.ctor === 'Ok') {
-		return _elm_lang$core$Task$succeed(_p6._0);
-	} else {
-		return _elm_lang$core$Task$fail(_p6._0);
-	}
-};
-var _elm_lang$core$Task$init = _elm_lang$core$Task$succeed(
-	{ctor: '_Tuple0'});
-var _elm_lang$core$Task$onSelfMsg = F3(
-	function (_p9, _p8, _p7) {
-		return _elm_lang$core$Task$succeed(
-			{ctor: '_Tuple0'});
-	});
-var _elm_lang$core$Task$command = _elm_lang$core$Native_Platform.leaf('Task');
-var _elm_lang$core$Task$T = function (a) {
-	return {ctor: 'T', _0: a};
-};
-var _elm_lang$core$Task$perform = F3(
-	function (onFail, onSuccess, task) {
-		return _elm_lang$core$Task$command(
-			_elm_lang$core$Task$T(
-				A2(
-					_elm_lang$core$Task$onError,
-					A2(_elm_lang$core$Task$map, onSuccess, task),
-					function (x) {
-						return _elm_lang$core$Task$succeed(
-							onFail(x));
-					})));
-	});
-var _elm_lang$core$Task$cmdMap = F2(
-	function (tagger, _p10) {
-		var _p11 = _p10;
-		return _elm_lang$core$Task$T(
-			A2(_elm_lang$core$Task$map, tagger, _p11._0));
-	});
-_elm_lang$core$Native_Platform.effectManagers['Task'] = {pkg: 'elm-lang/core', init: _elm_lang$core$Task$init, onEffects: _elm_lang$core$Task$onEffects, onSelfMsg: _elm_lang$core$Task$onSelfMsg, tag: 'cmd', cmdMap: _elm_lang$core$Task$cmdMap};
+var _elm_lang$core$Array$Array = {ctor: 'Array'};
 
 //import Maybe, Native.List, Native.Utils, Result //
 
@@ -4326,1391 +5081,6 @@ var _elm_lang$core$Dict$diff = F2(
 			t2);
 	});
 
-//import Native.Scheduler //
-
-var _elm_lang$core$Native_Time = function() {
-
-var now = _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
-{
-	callback(_elm_lang$core$Native_Scheduler.succeed(Date.now()));
-});
-
-function setInterval_(interval, task)
-{
-	return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
-	{
-		var id = setInterval(function() {
-			_elm_lang$core$Native_Scheduler.rawSpawn(task);
-		}, interval);
-
-		return function() { clearInterval(id); };
-	});
-}
-
-return {
-	now: now,
-	setInterval_: F2(setInterval_)
-};
-
-}();
-var _elm_lang$core$Time$setInterval = _elm_lang$core$Native_Time.setInterval_;
-var _elm_lang$core$Time$spawnHelp = F3(
-	function (router, intervals, processes) {
-		var _p0 = intervals;
-		if (_p0.ctor === '[]') {
-			return _elm_lang$core$Task$succeed(processes);
-		} else {
-			var _p1 = _p0._0;
-			return A2(
-				_elm_lang$core$Task$andThen,
-				_elm_lang$core$Native_Scheduler.spawn(
-					A2(
-						_elm_lang$core$Time$setInterval,
-						_p1,
-						A2(_elm_lang$core$Platform$sendToSelf, router, _p1))),
-				function (id) {
-					return A3(
-						_elm_lang$core$Time$spawnHelp,
-						router,
-						_p0._1,
-						A3(_elm_lang$core$Dict$insert, _p1, id, processes));
-				});
-		}
-	});
-var _elm_lang$core$Time$addMySub = F2(
-	function (_p2, state) {
-		var _p3 = _p2;
-		var _p6 = _p3._1;
-		var _p5 = _p3._0;
-		var _p4 = A2(_elm_lang$core$Dict$get, _p5, state);
-		if (_p4.ctor === 'Nothing') {
-			return A3(
-				_elm_lang$core$Dict$insert,
-				_p5,
-				_elm_lang$core$Native_List.fromArray(
-					[_p6]),
-				state);
-		} else {
-			return A3(
-				_elm_lang$core$Dict$insert,
-				_p5,
-				A2(_elm_lang$core$List_ops['::'], _p6, _p4._0),
-				state);
-		}
-	});
-var _elm_lang$core$Time$inMilliseconds = function (t) {
-	return t;
-};
-var _elm_lang$core$Time$millisecond = 1;
-var _elm_lang$core$Time$second = 1000 * _elm_lang$core$Time$millisecond;
-var _elm_lang$core$Time$minute = 60 * _elm_lang$core$Time$second;
-var _elm_lang$core$Time$hour = 60 * _elm_lang$core$Time$minute;
-var _elm_lang$core$Time$inHours = function (t) {
-	return t / _elm_lang$core$Time$hour;
-};
-var _elm_lang$core$Time$inMinutes = function (t) {
-	return t / _elm_lang$core$Time$minute;
-};
-var _elm_lang$core$Time$inSeconds = function (t) {
-	return t / _elm_lang$core$Time$second;
-};
-var _elm_lang$core$Time$now = _elm_lang$core$Native_Time.now;
-var _elm_lang$core$Time$onSelfMsg = F3(
-	function (router, interval, state) {
-		var _p7 = A2(_elm_lang$core$Dict$get, interval, state.taggers);
-		if (_p7.ctor === 'Nothing') {
-			return _elm_lang$core$Task$succeed(state);
-		} else {
-			return A2(
-				_elm_lang$core$Task$andThen,
-				_elm_lang$core$Time$now,
-				function (time) {
-					return A2(
-						_elm_lang$core$Task$andThen,
-						_elm_lang$core$Task$sequence(
-							A2(
-								_elm_lang$core$List$map,
-								function (tagger) {
-									return A2(
-										_elm_lang$core$Platform$sendToApp,
-										router,
-										tagger(time));
-								},
-								_p7._0)),
-						function (_p8) {
-							return _elm_lang$core$Task$succeed(state);
-						});
-				});
-		}
-	});
-var _elm_lang$core$Time$subscription = _elm_lang$core$Native_Platform.leaf('Time');
-var _elm_lang$core$Time$State = F2(
-	function (a, b) {
-		return {taggers: a, processes: b};
-	});
-var _elm_lang$core$Time$init = _elm_lang$core$Task$succeed(
-	A2(_elm_lang$core$Time$State, _elm_lang$core$Dict$empty, _elm_lang$core$Dict$empty));
-var _elm_lang$core$Time$onEffects = F3(
-	function (router, subs, _p9) {
-		var _p10 = _p9;
-		var rightStep = F3(
-			function (_p12, id, _p11) {
-				var _p13 = _p11;
-				return {
-					ctor: '_Tuple3',
-					_0: _p13._0,
-					_1: _p13._1,
-					_2: A2(
-						_elm_lang$core$Task$andThen,
-						_elm_lang$core$Native_Scheduler.kill(id),
-						function (_p14) {
-							return _p13._2;
-						})
-				};
-			});
-		var bothStep = F4(
-			function (interval, taggers, id, _p15) {
-				var _p16 = _p15;
-				return {
-					ctor: '_Tuple3',
-					_0: _p16._0,
-					_1: A3(_elm_lang$core$Dict$insert, interval, id, _p16._1),
-					_2: _p16._2
-				};
-			});
-		var leftStep = F3(
-			function (interval, taggers, _p17) {
-				var _p18 = _p17;
-				return {
-					ctor: '_Tuple3',
-					_0: A2(_elm_lang$core$List_ops['::'], interval, _p18._0),
-					_1: _p18._1,
-					_2: _p18._2
-				};
-			});
-		var newTaggers = A3(_elm_lang$core$List$foldl, _elm_lang$core$Time$addMySub, _elm_lang$core$Dict$empty, subs);
-		var _p19 = A6(
-			_elm_lang$core$Dict$merge,
-			leftStep,
-			bothStep,
-			rightStep,
-			newTaggers,
-			_p10.processes,
-			{
-				ctor: '_Tuple3',
-				_0: _elm_lang$core$Native_List.fromArray(
-					[]),
-				_1: _elm_lang$core$Dict$empty,
-				_2: _elm_lang$core$Task$succeed(
-					{ctor: '_Tuple0'})
-			});
-		var spawnList = _p19._0;
-		var existingDict = _p19._1;
-		var killTask = _p19._2;
-		return A2(
-			_elm_lang$core$Task$andThen,
-			killTask,
-			function (_p20) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					A3(_elm_lang$core$Time$spawnHelp, router, spawnList, existingDict),
-					function (newProcesses) {
-						return _elm_lang$core$Task$succeed(
-							A2(_elm_lang$core$Time$State, newTaggers, newProcesses));
-					});
-			});
-	});
-var _elm_lang$core$Time$Every = F2(
-	function (a, b) {
-		return {ctor: 'Every', _0: a, _1: b};
-	});
-var _elm_lang$core$Time$every = F2(
-	function (interval, tagger) {
-		return _elm_lang$core$Time$subscription(
-			A2(_elm_lang$core$Time$Every, interval, tagger));
-	});
-var _elm_lang$core$Time$subMap = F2(
-	function (f, _p21) {
-		var _p22 = _p21;
-		return A2(
-			_elm_lang$core$Time$Every,
-			_p22._0,
-			function (_p23) {
-				return f(
-					_p22._1(_p23));
-			});
-	});
-_elm_lang$core$Native_Platform.effectManagers['Time'] = {pkg: 'elm-lang/core', init: _elm_lang$core$Time$init, onEffects: _elm_lang$core$Time$onEffects, onSelfMsg: _elm_lang$core$Time$onSelfMsg, tag: 'sub', subMap: _elm_lang$core$Time$subMap};
-
-var _elm_lang$core$Process$kill = _elm_lang$core$Native_Scheduler.kill;
-var _elm_lang$core$Process$sleep = _elm_lang$core$Native_Scheduler.sleep;
-var _elm_lang$core$Process$spawn = _elm_lang$core$Native_Scheduler.spawn;
-
-var _elm_lang$animation_frame$AnimationFrame$rAF = _elm_lang$animation_frame$Native_AnimationFrame.rAF;
-var _elm_lang$animation_frame$AnimationFrame$subscription = _elm_lang$core$Native_Platform.leaf('AnimationFrame');
-var _elm_lang$animation_frame$AnimationFrame$State = F3(
-	function (a, b, c) {
-		return {subs: a, request: b, oldTime: c};
-	});
-var _elm_lang$animation_frame$AnimationFrame$init = _elm_lang$core$Task$succeed(
-	A3(
-		_elm_lang$animation_frame$AnimationFrame$State,
-		_elm_lang$core$Native_List.fromArray(
-			[]),
-		_elm_lang$core$Maybe$Nothing,
-		0));
-var _elm_lang$animation_frame$AnimationFrame$onEffects = F3(
-	function (router, subs, _p0) {
-		var _p1 = _p0;
-		var _p5 = _p1.request;
-		var _p4 = _p1.oldTime;
-		var _p2 = {ctor: '_Tuple2', _0: _p5, _1: subs};
-		if (_p2._0.ctor === 'Nothing') {
-			if (_p2._1.ctor === '[]') {
-				return _elm_lang$core$Task$succeed(
-					A3(
-						_elm_lang$animation_frame$AnimationFrame$State,
-						_elm_lang$core$Native_List.fromArray(
-							[]),
-						_elm_lang$core$Maybe$Nothing,
-						_p4));
-			} else {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					_elm_lang$core$Process$spawn(
-						A2(
-							_elm_lang$core$Task$andThen,
-							_elm_lang$animation_frame$AnimationFrame$rAF,
-							_elm_lang$core$Platform$sendToSelf(router))),
-					function (pid) {
-						return A2(
-							_elm_lang$core$Task$andThen,
-							_elm_lang$core$Time$now,
-							function (time) {
-								return _elm_lang$core$Task$succeed(
-									A3(
-										_elm_lang$animation_frame$AnimationFrame$State,
-										subs,
-										_elm_lang$core$Maybe$Just(pid),
-										time));
-							});
-					});
-			}
-		} else {
-			if (_p2._1.ctor === '[]') {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					_elm_lang$core$Process$kill(_p2._0._0),
-					function (_p3) {
-						return _elm_lang$core$Task$succeed(
-							A3(
-								_elm_lang$animation_frame$AnimationFrame$State,
-								_elm_lang$core$Native_List.fromArray(
-									[]),
-								_elm_lang$core$Maybe$Nothing,
-								_p4));
-					});
-			} else {
-				return _elm_lang$core$Task$succeed(
-					A3(_elm_lang$animation_frame$AnimationFrame$State, subs, _p5, _p4));
-			}
-		}
-	});
-var _elm_lang$animation_frame$AnimationFrame$onSelfMsg = F3(
-	function (router, newTime, _p6) {
-		var _p7 = _p6;
-		var _p10 = _p7.subs;
-		var diff = newTime - _p7.oldTime;
-		var send = function (sub) {
-			var _p8 = sub;
-			if (_p8.ctor === 'Time') {
-				return A2(
-					_elm_lang$core$Platform$sendToApp,
-					router,
-					_p8._0(newTime));
-			} else {
-				return A2(
-					_elm_lang$core$Platform$sendToApp,
-					router,
-					_p8._0(diff));
-			}
-		};
-		return A2(
-			_elm_lang$core$Task$andThen,
-			_elm_lang$core$Process$spawn(
-				A2(
-					_elm_lang$core$Task$andThen,
-					_elm_lang$animation_frame$AnimationFrame$rAF,
-					_elm_lang$core$Platform$sendToSelf(router))),
-			function (pid) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					_elm_lang$core$Task$sequence(
-						A2(_elm_lang$core$List$map, send, _p10)),
-					function (_p9) {
-						return _elm_lang$core$Task$succeed(
-							A3(
-								_elm_lang$animation_frame$AnimationFrame$State,
-								_p10,
-								_elm_lang$core$Maybe$Just(pid),
-								newTime));
-					});
-			});
-	});
-var _elm_lang$animation_frame$AnimationFrame$Diff = function (a) {
-	return {ctor: 'Diff', _0: a};
-};
-var _elm_lang$animation_frame$AnimationFrame$diffs = function (tagger) {
-	return _elm_lang$animation_frame$AnimationFrame$subscription(
-		_elm_lang$animation_frame$AnimationFrame$Diff(tagger));
-};
-var _elm_lang$animation_frame$AnimationFrame$Time = function (a) {
-	return {ctor: 'Time', _0: a};
-};
-var _elm_lang$animation_frame$AnimationFrame$times = function (tagger) {
-	return _elm_lang$animation_frame$AnimationFrame$subscription(
-		_elm_lang$animation_frame$AnimationFrame$Time(tagger));
-};
-var _elm_lang$animation_frame$AnimationFrame$subMap = F2(
-	function (func, sub) {
-		var _p11 = sub;
-		if (_p11.ctor === 'Time') {
-			return _elm_lang$animation_frame$AnimationFrame$Time(
-				function (_p12) {
-					return func(
-						_p11._0(_p12));
-				});
-		} else {
-			return _elm_lang$animation_frame$AnimationFrame$Diff(
-				function (_p13) {
-					return func(
-						_p11._0(_p13));
-				});
-		}
-	});
-_elm_lang$core$Native_Platform.effectManagers['AnimationFrame'] = {pkg: 'elm-lang/animation-frame', init: _elm_lang$animation_frame$AnimationFrame$init, onEffects: _elm_lang$animation_frame$AnimationFrame$onEffects, onSelfMsg: _elm_lang$animation_frame$AnimationFrame$onSelfMsg, tag: 'sub', subMap: _elm_lang$animation_frame$AnimationFrame$subMap};
-
-//import Native.List //
-
-var _elm_lang$core$Native_Array = function() {
-
-// A RRB-Tree has two distinct data types.
-// Leaf -> "height"  is always 0
-//         "table"   is an array of elements
-// Node -> "height"  is always greater than 0
-//         "table"   is an array of child nodes
-//         "lengths" is an array of accumulated lengths of the child nodes
-
-// M is the maximal table size. 32 seems fast. E is the allowed increase
-// of search steps when concatting to find an index. Lower values will
-// decrease balancing, but will increase search steps.
-var M = 32;
-var E = 2;
-
-// An empty array.
-var empty = {
-	ctor: '_Array',
-	height: 0,
-	table: []
-};
-
-
-function get(i, array)
-{
-	if (i < 0 || i >= length(array))
-	{
-		throw new Error(
-			'Index ' + i + ' is out of range. Check the length of ' +
-			'your array first or use getMaybe or getWithDefault.');
-	}
-	return unsafeGet(i, array);
-}
-
-
-function unsafeGet(i, array)
-{
-	for (var x = array.height; x > 0; x--)
-	{
-		var slot = i >> (x * 5);
-		while (array.lengths[slot] <= i)
-		{
-			slot++;
-		}
-		if (slot > 0)
-		{
-			i -= array.lengths[slot - 1];
-		}
-		array = array.table[slot];
-	}
-	return array.table[i];
-}
-
-
-// Sets the value at the index i. Only the nodes leading to i will get
-// copied and updated.
-function set(i, item, array)
-{
-	if (i < 0 || length(array) <= i)
-	{
-		return array;
-	}
-	return unsafeSet(i, item, array);
-}
-
-
-function unsafeSet(i, item, array)
-{
-	array = nodeCopy(array);
-
-	if (array.height === 0)
-	{
-		array.table[i] = item;
-	}
-	else
-	{
-		var slot = getSlot(i, array);
-		if (slot > 0)
-		{
-			i -= array.lengths[slot - 1];
-		}
-		array.table[slot] = unsafeSet(i, item, array.table[slot]);
-	}
-	return array;
-}
-
-
-function initialize(len, f)
-{
-	if (len <= 0)
-	{
-		return empty;
-	}
-	var h = Math.floor( Math.log(len) / Math.log(M) );
-	return initialize_(f, h, 0, len);
-}
-
-function initialize_(f, h, from, to)
-{
-	if (h === 0)
-	{
-		var table = new Array((to - from) % (M + 1));
-		for (var i = 0; i < table.length; i++)
-		{
-		  table[i] = f(from + i);
-		}
-		return {
-			ctor: '_Array',
-			height: 0,
-			table: table
-		};
-	}
-
-	var step = Math.pow(M, h);
-	var table = new Array(Math.ceil((to - from) / step));
-	var lengths = new Array(table.length);
-	for (var i = 0; i < table.length; i++)
-	{
-		table[i] = initialize_(f, h - 1, from + (i * step), Math.min(from + ((i + 1) * step), to));
-		lengths[i] = length(table[i]) + (i > 0 ? lengths[i-1] : 0);
-	}
-	return {
-		ctor: '_Array',
-		height: h,
-		table: table,
-		lengths: lengths
-	};
-}
-
-function fromList(list)
-{
-	if (list.ctor === '[]')
-	{
-		return empty;
-	}
-
-	// Allocate M sized blocks (table) and write list elements to it.
-	var table = new Array(M);
-	var nodes = [];
-	var i = 0;
-
-	while (list.ctor !== '[]')
-	{
-		table[i] = list._0;
-		list = list._1;
-		i++;
-
-		// table is full, so we can push a leaf containing it into the
-		// next node.
-		if (i === M)
-		{
-			var leaf = {
-				ctor: '_Array',
-				height: 0,
-				table: table
-			};
-			fromListPush(leaf, nodes);
-			table = new Array(M);
-			i = 0;
-		}
-	}
-
-	// Maybe there is something left on the table.
-	if (i > 0)
-	{
-		var leaf = {
-			ctor: '_Array',
-			height: 0,
-			table: table.splice(0, i)
-		};
-		fromListPush(leaf, nodes);
-	}
-
-	// Go through all of the nodes and eventually push them into higher nodes.
-	for (var h = 0; h < nodes.length - 1; h++)
-	{
-		if (nodes[h].table.length > 0)
-		{
-			fromListPush(nodes[h], nodes);
-		}
-	}
-
-	var head = nodes[nodes.length - 1];
-	if (head.height > 0 && head.table.length === 1)
-	{
-		return head.table[0];
-	}
-	else
-	{
-		return head;
-	}
-}
-
-// Push a node into a higher node as a child.
-function fromListPush(toPush, nodes)
-{
-	var h = toPush.height;
-
-	// Maybe the node on this height does not exist.
-	if (nodes.length === h)
-	{
-		var node = {
-			ctor: '_Array',
-			height: h + 1,
-			table: [],
-			lengths: []
-		};
-		nodes.push(node);
-	}
-
-	nodes[h].table.push(toPush);
-	var len = length(toPush);
-	if (nodes[h].lengths.length > 0)
-	{
-		len += nodes[h].lengths[nodes[h].lengths.length - 1];
-	}
-	nodes[h].lengths.push(len);
-
-	if (nodes[h].table.length === M)
-	{
-		fromListPush(nodes[h], nodes);
-		nodes[h] = {
-			ctor: '_Array',
-			height: h + 1,
-			table: [],
-			lengths: []
-		};
-	}
-}
-
-// Pushes an item via push_ to the bottom right of a tree.
-function push(item, a)
-{
-	var pushed = push_(item, a);
-	if (pushed !== null)
-	{
-		return pushed;
-	}
-
-	var newTree = create(item, a.height);
-	return siblise(a, newTree);
-}
-
-// Recursively tries to push an item to the bottom-right most
-// tree possible. If there is no space left for the item,
-// null will be returned.
-function push_(item, a)
-{
-	// Handle resursion stop at leaf level.
-	if (a.height === 0)
-	{
-		if (a.table.length < M)
-		{
-			var newA = {
-				ctor: '_Array',
-				height: 0,
-				table: a.table.slice()
-			};
-			newA.table.push(item);
-			return newA;
-		}
-		else
-		{
-		  return null;
-		}
-	}
-
-	// Recursively push
-	var pushed = push_(item, botRight(a));
-
-	// There was space in the bottom right tree, so the slot will
-	// be updated.
-	if (pushed !== null)
-	{
-		var newA = nodeCopy(a);
-		newA.table[newA.table.length - 1] = pushed;
-		newA.lengths[newA.lengths.length - 1]++;
-		return newA;
-	}
-
-	// When there was no space left, check if there is space left
-	// for a new slot with a tree which contains only the item
-	// at the bottom.
-	if (a.table.length < M)
-	{
-		var newSlot = create(item, a.height - 1);
-		var newA = nodeCopy(a);
-		newA.table.push(newSlot);
-		newA.lengths.push(newA.lengths[newA.lengths.length - 1] + length(newSlot));
-		return newA;
-	}
-	else
-	{
-		return null;
-	}
-}
-
-// Converts an array into a list of elements.
-function toList(a)
-{
-	return toList_(_elm_lang$core$Native_List.Nil, a);
-}
-
-function toList_(list, a)
-{
-	for (var i = a.table.length - 1; i >= 0; i--)
-	{
-		list =
-			a.height === 0
-				? _elm_lang$core$Native_List.Cons(a.table[i], list)
-				: toList_(list, a.table[i]);
-	}
-	return list;
-}
-
-// Maps a function over the elements of an array.
-function map(f, a)
-{
-	var newA = {
-		ctor: '_Array',
-		height: a.height,
-		table: new Array(a.table.length)
-	};
-	if (a.height > 0)
-	{
-		newA.lengths = a.lengths;
-	}
-	for (var i = 0; i < a.table.length; i++)
-	{
-		newA.table[i] =
-			a.height === 0
-				? f(a.table[i])
-				: map(f, a.table[i]);
-	}
-	return newA;
-}
-
-// Maps a function over the elements with their index as first argument.
-function indexedMap(f, a)
-{
-	return indexedMap_(f, a, 0);
-}
-
-function indexedMap_(f, a, from)
-{
-	var newA = {
-		ctor: '_Array',
-		height: a.height,
-		table: new Array(a.table.length)
-	};
-	if (a.height > 0)
-	{
-		newA.lengths = a.lengths;
-	}
-	for (var i = 0; i < a.table.length; i++)
-	{
-		newA.table[i] =
-			a.height === 0
-				? A2(f, from + i, a.table[i])
-				: indexedMap_(f, a.table[i], i == 0 ? from : from + a.lengths[i - 1]);
-	}
-	return newA;
-}
-
-function foldl(f, b, a)
-{
-	if (a.height === 0)
-	{
-		for (var i = 0; i < a.table.length; i++)
-		{
-			b = A2(f, a.table[i], b);
-		}
-	}
-	else
-	{
-		for (var i = 0; i < a.table.length; i++)
-		{
-			b = foldl(f, b, a.table[i]);
-		}
-	}
-	return b;
-}
-
-function foldr(f, b, a)
-{
-	if (a.height === 0)
-	{
-		for (var i = a.table.length; i--; )
-		{
-			b = A2(f, a.table[i], b);
-		}
-	}
-	else
-	{
-		for (var i = a.table.length; i--; )
-		{
-			b = foldr(f, b, a.table[i]);
-		}
-	}
-	return b;
-}
-
-// TODO: currently, it slices the right, then the left. This can be
-// optimized.
-function slice(from, to, a)
-{
-	if (from < 0)
-	{
-		from += length(a);
-	}
-	if (to < 0)
-	{
-		to += length(a);
-	}
-	return sliceLeft(from, sliceRight(to, a));
-}
-
-function sliceRight(to, a)
-{
-	if (to === length(a))
-	{
-		return a;
-	}
-
-	// Handle leaf level.
-	if (a.height === 0)
-	{
-		var newA = { ctor:'_Array', height:0 };
-		newA.table = a.table.slice(0, to);
-		return newA;
-	}
-
-	// Slice the right recursively.
-	var right = getSlot(to, a);
-	var sliced = sliceRight(to - (right > 0 ? a.lengths[right - 1] : 0), a.table[right]);
-
-	// Maybe the a node is not even needed, as sliced contains the whole slice.
-	if (right === 0)
-	{
-		return sliced;
-	}
-
-	// Create new node.
-	var newA = {
-		ctor: '_Array',
-		height: a.height,
-		table: a.table.slice(0, right),
-		lengths: a.lengths.slice(0, right)
-	};
-	if (sliced.table.length > 0)
-	{
-		newA.table[right] = sliced;
-		newA.lengths[right] = length(sliced) + (right > 0 ? newA.lengths[right - 1] : 0);
-	}
-	return newA;
-}
-
-function sliceLeft(from, a)
-{
-	if (from === 0)
-	{
-		return a;
-	}
-
-	// Handle leaf level.
-	if (a.height === 0)
-	{
-		var newA = { ctor:'_Array', height:0 };
-		newA.table = a.table.slice(from, a.table.length + 1);
-		return newA;
-	}
-
-	// Slice the left recursively.
-	var left = getSlot(from, a);
-	var sliced = sliceLeft(from - (left > 0 ? a.lengths[left - 1] : 0), a.table[left]);
-
-	// Maybe the a node is not even needed, as sliced contains the whole slice.
-	if (left === a.table.length - 1)
-	{
-		return sliced;
-	}
-
-	// Create new node.
-	var newA = {
-		ctor: '_Array',
-		height: a.height,
-		table: a.table.slice(left, a.table.length + 1),
-		lengths: new Array(a.table.length - left)
-	};
-	newA.table[0] = sliced;
-	var len = 0;
-	for (var i = 0; i < newA.table.length; i++)
-	{
-		len += length(newA.table[i]);
-		newA.lengths[i] = len;
-	}
-
-	return newA;
-}
-
-// Appends two trees.
-function append(a,b)
-{
-	if (a.table.length === 0)
-	{
-		return b;
-	}
-	if (b.table.length === 0)
-	{
-		return a;
-	}
-
-	var c = append_(a, b);
-
-	// Check if both nodes can be crunshed together.
-	if (c[0].table.length + c[1].table.length <= M)
-	{
-		if (c[0].table.length === 0)
-		{
-			return c[1];
-		}
-		if (c[1].table.length === 0)
-		{
-			return c[0];
-		}
-
-		// Adjust .table and .lengths
-		c[0].table = c[0].table.concat(c[1].table);
-		if (c[0].height > 0)
-		{
-			var len = length(c[0]);
-			for (var i = 0; i < c[1].lengths.length; i++)
-			{
-				c[1].lengths[i] += len;
-			}
-			c[0].lengths = c[0].lengths.concat(c[1].lengths);
-		}
-
-		return c[0];
-	}
-
-	if (c[0].height > 0)
-	{
-		var toRemove = calcToRemove(a, b);
-		if (toRemove > E)
-		{
-			c = shuffle(c[0], c[1], toRemove);
-		}
-	}
-
-	return siblise(c[0], c[1]);
-}
-
-// Returns an array of two nodes; right and left. One node _may_ be empty.
-function append_(a, b)
-{
-	if (a.height === 0 && b.height === 0)
-	{
-		return [a, b];
-	}
-
-	if (a.height !== 1 || b.height !== 1)
-	{
-		if (a.height === b.height)
-		{
-			a = nodeCopy(a);
-			b = nodeCopy(b);
-			var appended = append_(botRight(a), botLeft(b));
-
-			insertRight(a, appended[1]);
-			insertLeft(b, appended[0]);
-		}
-		else if (a.height > b.height)
-		{
-			a = nodeCopy(a);
-			var appended = append_(botRight(a), b);
-
-			insertRight(a, appended[0]);
-			b = parentise(appended[1], appended[1].height + 1);
-		}
-		else
-		{
-			b = nodeCopy(b);
-			var appended = append_(a, botLeft(b));
-
-			var left = appended[0].table.length === 0 ? 0 : 1;
-			var right = left === 0 ? 1 : 0;
-			insertLeft(b, appended[left]);
-			a = parentise(appended[right], appended[right].height + 1);
-		}
-	}
-
-	// Check if balancing is needed and return based on that.
-	if (a.table.length === 0 || b.table.length === 0)
-	{
-		return [a, b];
-	}
-
-	var toRemove = calcToRemove(a, b);
-	if (toRemove <= E)
-	{
-		return [a, b];
-	}
-	return shuffle(a, b, toRemove);
-}
-
-// Helperfunctions for append_. Replaces a child node at the side of the parent.
-function insertRight(parent, node)
-{
-	var index = parent.table.length - 1;
-	parent.table[index] = node;
-	parent.lengths[index] = length(node);
-	parent.lengths[index] += index > 0 ? parent.lengths[index - 1] : 0;
-}
-
-function insertLeft(parent, node)
-{
-	if (node.table.length > 0)
-	{
-		parent.table[0] = node;
-		parent.lengths[0] = length(node);
-
-		var len = length(parent.table[0]);
-		for (var i = 1; i < parent.lengths.length; i++)
-		{
-			len += length(parent.table[i]);
-			parent.lengths[i] = len;
-		}
-	}
-	else
-	{
-		parent.table.shift();
-		for (var i = 1; i < parent.lengths.length; i++)
-		{
-			parent.lengths[i] = parent.lengths[i] - parent.lengths[0];
-		}
-		parent.lengths.shift();
-	}
-}
-
-// Returns the extra search steps for E. Refer to the paper.
-function calcToRemove(a, b)
-{
-	var subLengths = 0;
-	for (var i = 0; i < a.table.length; i++)
-	{
-		subLengths += a.table[i].table.length;
-	}
-	for (var i = 0; i < b.table.length; i++)
-	{
-		subLengths += b.table[i].table.length;
-	}
-
-	var toRemove = a.table.length + b.table.length;
-	return toRemove - (Math.floor((subLengths - 1) / M) + 1);
-}
-
-// get2, set2 and saveSlot are helpers for accessing elements over two arrays.
-function get2(a, b, index)
-{
-	return index < a.length
-		? a[index]
-		: b[index - a.length];
-}
-
-function set2(a, b, index, value)
-{
-	if (index < a.length)
-	{
-		a[index] = value;
-	}
-	else
-	{
-		b[index - a.length] = value;
-	}
-}
-
-function saveSlot(a, b, index, slot)
-{
-	set2(a.table, b.table, index, slot);
-
-	var l = (index === 0 || index === a.lengths.length)
-		? 0
-		: get2(a.lengths, a.lengths, index - 1);
-
-	set2(a.lengths, b.lengths, index, l + length(slot));
-}
-
-// Creates a node or leaf with a given length at their arrays for perfomance.
-// Is only used by shuffle.
-function createNode(h, length)
-{
-	if (length < 0)
-	{
-		length = 0;
-	}
-	var a = {
-		ctor: '_Array',
-		height: h,
-		table: new Array(length)
-	};
-	if (h > 0)
-	{
-		a.lengths = new Array(length);
-	}
-	return a;
-}
-
-// Returns an array of two balanced nodes.
-function shuffle(a, b, toRemove)
-{
-	var newA = createNode(a.height, Math.min(M, a.table.length + b.table.length - toRemove));
-	var newB = createNode(a.height, newA.table.length - (a.table.length + b.table.length - toRemove));
-
-	// Skip the slots with size M. More precise: copy the slot references
-	// to the new node
-	var read = 0;
-	while (get2(a.table, b.table, read).table.length % M === 0)
-	{
-		set2(newA.table, newB.table, read, get2(a.table, b.table, read));
-		set2(newA.lengths, newB.lengths, read, get2(a.lengths, b.lengths, read));
-		read++;
-	}
-
-	// Pulling items from left to right, caching in a slot before writing
-	// it into the new nodes.
-	var write = read;
-	var slot = new createNode(a.height - 1, 0);
-	var from = 0;
-
-	// If the current slot is still containing data, then there will be at
-	// least one more write, so we do not break this loop yet.
-	while (read - write - (slot.table.length > 0 ? 1 : 0) < toRemove)
-	{
-		// Find out the max possible items for copying.
-		var source = get2(a.table, b.table, read);
-		var to = Math.min(M - slot.table.length, source.table.length);
-
-		// Copy and adjust size table.
-		slot.table = slot.table.concat(source.table.slice(from, to));
-		if (slot.height > 0)
-		{
-			var len = slot.lengths.length;
-			for (var i = len; i < len + to - from; i++)
-			{
-				slot.lengths[i] = length(slot.table[i]);
-				slot.lengths[i] += (i > 0 ? slot.lengths[i - 1] : 0);
-			}
-		}
-
-		from += to;
-
-		// Only proceed to next slots[i] if the current one was
-		// fully copied.
-		if (source.table.length <= to)
-		{
-			read++; from = 0;
-		}
-
-		// Only create a new slot if the current one is filled up.
-		if (slot.table.length === M)
-		{
-			saveSlot(newA, newB, write, slot);
-			slot = createNode(a.height - 1, 0);
-			write++;
-		}
-	}
-
-	// Cleanup after the loop. Copy the last slot into the new nodes.
-	if (slot.table.length > 0)
-	{
-		saveSlot(newA, newB, write, slot);
-		write++;
-	}
-
-	// Shift the untouched slots to the left
-	while (read < a.table.length + b.table.length )
-	{
-		saveSlot(newA, newB, write, get2(a.table, b.table, read));
-		read++;
-		write++;
-	}
-
-	return [newA, newB];
-}
-
-// Navigation functions
-function botRight(a)
-{
-	return a.table[a.table.length - 1];
-}
-function botLeft(a)
-{
-	return a.table[0];
-}
-
-// Copies a node for updating. Note that you should not use this if
-// only updating only one of "table" or "lengths" for performance reasons.
-function nodeCopy(a)
-{
-	var newA = {
-		ctor: '_Array',
-		height: a.height,
-		table: a.table.slice()
-	};
-	if (a.height > 0)
-	{
-		newA.lengths = a.lengths.slice();
-	}
-	return newA;
-}
-
-// Returns how many items are in the tree.
-function length(array)
-{
-	if (array.height === 0)
-	{
-		return array.table.length;
-	}
-	else
-	{
-		return array.lengths[array.lengths.length - 1];
-	}
-}
-
-// Calculates in which slot of "table" the item probably is, then
-// find the exact slot via forward searching in  "lengths". Returns the index.
-function getSlot(i, a)
-{
-	var slot = i >> (5 * a.height);
-	while (a.lengths[slot] <= i)
-	{
-		slot++;
-	}
-	return slot;
-}
-
-// Recursively creates a tree with a given height containing
-// only the given item.
-function create(item, h)
-{
-	if (h === 0)
-	{
-		return {
-			ctor: '_Array',
-			height: 0,
-			table: [item]
-		};
-	}
-	return {
-		ctor: '_Array',
-		height: h,
-		table: [create(item, h - 1)],
-		lengths: [1]
-	};
-}
-
-// Recursively creates a tree that contains the given tree.
-function parentise(tree, h)
-{
-	if (h === tree.height)
-	{
-		return tree;
-	}
-
-	return {
-		ctor: '_Array',
-		height: h,
-		table: [parentise(tree, h - 1)],
-		lengths: [length(tree)]
-	};
-}
-
-// Emphasizes blood brotherhood beneath two trees.
-function siblise(a, b)
-{
-	return {
-		ctor: '_Array',
-		height: a.height + 1,
-		table: [a, b],
-		lengths: [length(a), length(a) + length(b)]
-	};
-}
-
-function toJSArray(a)
-{
-	var jsArray = new Array(length(a));
-	toJSArray_(jsArray, 0, a);
-	return jsArray;
-}
-
-function toJSArray_(jsArray, i, a)
-{
-	for (var t = 0; t < a.table.length; t++)
-	{
-		if (a.height === 0)
-		{
-			jsArray[i + t] = a.table[t];
-		}
-		else
-		{
-			var inc = t === 0 ? 0 : a.lengths[t - 1];
-			toJSArray_(jsArray, i + inc, a.table[t]);
-		}
-	}
-}
-
-function fromJSArray(jsArray)
-{
-	if (jsArray.length === 0)
-	{
-		return empty;
-	}
-	var h = Math.floor(Math.log(jsArray.length) / Math.log(M));
-	return fromJSArray_(jsArray, h, 0, jsArray.length);
-}
-
-function fromJSArray_(jsArray, h, from, to)
-{
-	if (h === 0)
-	{
-		return {
-			ctor: '_Array',
-			height: 0,
-			table: jsArray.slice(from, to)
-		};
-	}
-
-	var step = Math.pow(M, h);
-	var table = new Array(Math.ceil((to - from) / step));
-	var lengths = new Array(table.length);
-	for (var i = 0; i < table.length; i++)
-	{
-		table[i] = fromJSArray_(jsArray, h - 1, from + (i * step), Math.min(from + ((i + 1) * step), to));
-		lengths[i] = length(table[i]) + (i > 0 ? lengths[i - 1] : 0);
-	}
-	return {
-		ctor: '_Array',
-		height: h,
-		table: table,
-		lengths: lengths
-	};
-}
-
-return {
-	empty: empty,
-	fromList: fromList,
-	toList: toList,
-	initialize: F2(initialize),
-	append: F2(append),
-	push: F2(push),
-	slice: F3(slice),
-	get: F2(get),
-	set: F3(set),
-	map: F2(map),
-	indexedMap: F2(indexedMap),
-	foldl: F3(foldl),
-	foldr: F3(foldr),
-	length: length,
-
-	toJSArray: toJSArray,
-	fromJSArray: fromJSArray
-};
-
-}();
-var _elm_lang$core$Array$append = _elm_lang$core$Native_Array.append;
-var _elm_lang$core$Array$length = _elm_lang$core$Native_Array.length;
-var _elm_lang$core$Array$isEmpty = function (array) {
-	return _elm_lang$core$Native_Utils.eq(
-		_elm_lang$core$Array$length(array),
-		0);
-};
-var _elm_lang$core$Array$slice = _elm_lang$core$Native_Array.slice;
-var _elm_lang$core$Array$set = _elm_lang$core$Native_Array.set;
-var _elm_lang$core$Array$get = F2(
-	function (i, array) {
-		return ((_elm_lang$core$Native_Utils.cmp(0, i) < 1) && (_elm_lang$core$Native_Utils.cmp(
-			i,
-			_elm_lang$core$Native_Array.length(array)) < 0)) ? _elm_lang$core$Maybe$Just(
-			A2(_elm_lang$core$Native_Array.get, i, array)) : _elm_lang$core$Maybe$Nothing;
-	});
-var _elm_lang$core$Array$push = _elm_lang$core$Native_Array.push;
-var _elm_lang$core$Array$empty = _elm_lang$core$Native_Array.empty;
-var _elm_lang$core$Array$filter = F2(
-	function (isOkay, arr) {
-		var update = F2(
-			function (x, xs) {
-				return isOkay(x) ? A2(_elm_lang$core$Native_Array.push, x, xs) : xs;
-			});
-		return A3(_elm_lang$core$Native_Array.foldl, update, _elm_lang$core$Native_Array.empty, arr);
-	});
-var _elm_lang$core$Array$foldr = _elm_lang$core$Native_Array.foldr;
-var _elm_lang$core$Array$foldl = _elm_lang$core$Native_Array.foldl;
-var _elm_lang$core$Array$indexedMap = _elm_lang$core$Native_Array.indexedMap;
-var _elm_lang$core$Array$map = _elm_lang$core$Native_Array.map;
-var _elm_lang$core$Array$toIndexedList = function (array) {
-	return A3(
-		_elm_lang$core$List$map2,
-		F2(
-			function (v0, v1) {
-				return {ctor: '_Tuple2', _0: v0, _1: v1};
-			}),
-		_elm_lang$core$Native_List.range(
-			0,
-			_elm_lang$core$Native_Array.length(array) - 1),
-		_elm_lang$core$Native_Array.toList(array));
-};
-var _elm_lang$core$Array$toList = _elm_lang$core$Native_Array.toList;
-var _elm_lang$core$Array$fromList = _elm_lang$core$Native_Array.fromList;
-var _elm_lang$core$Array$initialize = _elm_lang$core$Native_Array.initialize;
-var _elm_lang$core$Array$repeat = F2(
-	function (n, e) {
-		return A2(
-			_elm_lang$core$Array$initialize,
-			n,
-			_elm_lang$core$Basics$always(e));
-	});
-var _elm_lang$core$Array$Array = {ctor: 'Array'};
-
 //import Maybe, Native.Array, Native.List, Native.Utils, Result //
 
 var _elm_lang$core$Native_Json = function() {
@@ -6447,314 +5817,318 @@ var _elm_lang$core$Json_Decode$dict = function (decoder) {
 };
 var _elm_lang$core$Json_Decode$Decoder = {ctor: 'Decoder'};
 
-var _elm_lang$core$Set$foldr = F3(
-	function (f, b, _p0) {
-		var _p1 = _p0;
-		return A3(
-			_elm_lang$core$Dict$foldr,
-			F3(
-				function (k, _p2, b) {
-					return A2(f, k, b);
-				}),
-			b,
-			_p1._0);
-	});
-var _elm_lang$core$Set$foldl = F3(
-	function (f, b, _p3) {
-		var _p4 = _p3;
-		return A3(
-			_elm_lang$core$Dict$foldl,
-			F3(
-				function (k, _p5, b) {
-					return A2(f, k, b);
-				}),
-			b,
-			_p4._0);
-	});
-var _elm_lang$core$Set$toList = function (_p6) {
-	var _p7 = _p6;
-	return _elm_lang$core$Dict$keys(_p7._0);
-};
-var _elm_lang$core$Set$size = function (_p8) {
-	var _p9 = _p8;
-	return _elm_lang$core$Dict$size(_p9._0);
-};
-var _elm_lang$core$Set$member = F2(
-	function (k, _p10) {
-		var _p11 = _p10;
-		return A2(_elm_lang$core$Dict$member, k, _p11._0);
-	});
-var _elm_lang$core$Set$isEmpty = function (_p12) {
-	var _p13 = _p12;
-	return _elm_lang$core$Dict$isEmpty(_p13._0);
-};
-var _elm_lang$core$Set$Set_elm_builtin = function (a) {
-	return {ctor: 'Set_elm_builtin', _0: a};
-};
-var _elm_lang$core$Set$empty = _elm_lang$core$Set$Set_elm_builtin(_elm_lang$core$Dict$empty);
-var _elm_lang$core$Set$singleton = function (k) {
-	return _elm_lang$core$Set$Set_elm_builtin(
+var _debois$elm_dom$DOM$className = A2(
+	_elm_lang$core$Json_Decode$at,
+	_elm_lang$core$Native_List.fromArray(
+		['className']),
+	_elm_lang$core$Json_Decode$string);
+var _debois$elm_dom$DOM$scrollTop = A2(_elm_lang$core$Json_Decode_ops[':='], 'scrollTop', _elm_lang$core$Json_Decode$float);
+var _debois$elm_dom$DOM$scrollLeft = A2(_elm_lang$core$Json_Decode_ops[':='], 'scrollLeft', _elm_lang$core$Json_Decode$float);
+var _debois$elm_dom$DOM$offsetTop = A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetTop', _elm_lang$core$Json_Decode$float);
+var _debois$elm_dom$DOM$offsetLeft = A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetLeft', _elm_lang$core$Json_Decode$float);
+var _debois$elm_dom$DOM$offsetHeight = A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetHeight', _elm_lang$core$Json_Decode$float);
+var _debois$elm_dom$DOM$offsetWidth = A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetWidth', _elm_lang$core$Json_Decode$float);
+var _debois$elm_dom$DOM$childNodes = function (decoder) {
+	var loop = F2(
+		function (idx, xs) {
+			return A2(
+				_elm_lang$core$Json_Decode$andThen,
+				_elm_lang$core$Json_Decode$maybe(
+					A2(
+						_elm_lang$core$Json_Decode_ops[':='],
+						_elm_lang$core$Basics$toString(idx),
+						decoder)),
+				function (_p0) {
+					return A2(
+						_elm_lang$core$Maybe$withDefault,
+						_elm_lang$core$Json_Decode$succeed(xs),
+						A2(
+							_elm_lang$core$Maybe$map,
+							function (x) {
+								return A2(
+									loop,
+									idx + 1,
+									A2(_elm_lang$core$List_ops['::'], x, xs));
+							},
+							_p0));
+				});
+		});
+	return A2(
+		_elm_lang$core$Json_Decode$map,
+		_elm_lang$core$List$reverse,
 		A2(
-			_elm_lang$core$Dict$singleton,
-			k,
-			{ctor: '_Tuple0'}));
-};
-var _elm_lang$core$Set$insert = F2(
-	function (k, _p14) {
-		var _p15 = _p14;
-		return _elm_lang$core$Set$Set_elm_builtin(
-			A3(
-				_elm_lang$core$Dict$insert,
-				k,
-				{ctor: '_Tuple0'},
-				_p15._0));
-	});
-var _elm_lang$core$Set$fromList = function (xs) {
-	return A3(_elm_lang$core$List$foldl, _elm_lang$core$Set$insert, _elm_lang$core$Set$empty, xs);
-};
-var _elm_lang$core$Set$map = F2(
-	function (f, s) {
-		return _elm_lang$core$Set$fromList(
+			_elm_lang$core$Json_Decode_ops[':='],
+			'childNodes',
 			A2(
-				_elm_lang$core$List$map,
-				f,
-				_elm_lang$core$Set$toList(s)));
+				loop,
+				0,
+				_elm_lang$core$Native_List.fromArray(
+					[]))));
+};
+var _debois$elm_dom$DOM$childNode = function (idx) {
+	return _elm_lang$core$Json_Decode$at(
+		_elm_lang$core$Native_List.fromArray(
+			[
+				'childNodes',
+				_elm_lang$core$Basics$toString(idx)
+			]));
+};
+var _debois$elm_dom$DOM$parentElement = function (decoder) {
+	return A2(_elm_lang$core$Json_Decode_ops[':='], 'parentElement', decoder);
+};
+var _debois$elm_dom$DOM$previousSibling = function (decoder) {
+	return A2(_elm_lang$core$Json_Decode_ops[':='], 'previousSibling', decoder);
+};
+var _debois$elm_dom$DOM$nextSibling = function (decoder) {
+	return A2(_elm_lang$core$Json_Decode_ops[':='], 'nextSibling', decoder);
+};
+var _debois$elm_dom$DOM$offsetParent = F2(
+	function (x, decoder) {
+		return _elm_lang$core$Json_Decode$oneOf(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_elm_lang$core$Json_Decode_ops[':='],
+					'offsetParent',
+					_elm_lang$core$Json_Decode$null(x)),
+					A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetParent', decoder)
+				]));
 	});
-var _elm_lang$core$Set$remove = F2(
-	function (k, _p16) {
-		var _p17 = _p16;
-		return _elm_lang$core$Set$Set_elm_builtin(
-			A2(_elm_lang$core$Dict$remove, k, _p17._0));
-	});
-var _elm_lang$core$Set$union = F2(
-	function (_p19, _p18) {
-		var _p20 = _p19;
-		var _p21 = _p18;
-		return _elm_lang$core$Set$Set_elm_builtin(
-			A2(_elm_lang$core$Dict$union, _p20._0, _p21._0));
-	});
-var _elm_lang$core$Set$intersect = F2(
-	function (_p23, _p22) {
-		var _p24 = _p23;
-		var _p25 = _p22;
-		return _elm_lang$core$Set$Set_elm_builtin(
-			A2(_elm_lang$core$Dict$intersect, _p24._0, _p25._0));
-	});
-var _elm_lang$core$Set$diff = F2(
-	function (_p27, _p26) {
-		var _p28 = _p27;
-		var _p29 = _p26;
-		return _elm_lang$core$Set$Set_elm_builtin(
-			A2(_elm_lang$core$Dict$diff, _p28._0, _p29._0));
-	});
-var _elm_lang$core$Set$filter = F2(
-	function (p, _p30) {
-		var _p31 = _p30;
-		return _elm_lang$core$Set$Set_elm_builtin(
-			A2(
-				_elm_lang$core$Dict$filter,
-				F2(
-					function (k, _p32) {
-						return p(k);
+var _debois$elm_dom$DOM$position = F2(
+	function (x, y) {
+		return A2(
+			_elm_lang$core$Json_Decode$andThen,
+			A5(
+				_elm_lang$core$Json_Decode$object4,
+				F4(
+					function (scrollLeft, scrollTop, offsetLeft, offsetTop) {
+						return {ctor: '_Tuple2', _0: (x + offsetLeft) - scrollLeft, _1: (y + offsetTop) - scrollTop};
 					}),
-				_p31._0));
+				_debois$elm_dom$DOM$scrollLeft,
+				_debois$elm_dom$DOM$scrollTop,
+				_debois$elm_dom$DOM$offsetLeft,
+				_debois$elm_dom$DOM$offsetTop),
+			function (_p1) {
+				var _p2 = _p1;
+				var _p4 = _p2._1;
+				var _p3 = _p2._0;
+				return A2(
+					_debois$elm_dom$DOM$offsetParent,
+					{ctor: '_Tuple2', _0: _p3, _1: _p4},
+					A2(_debois$elm_dom$DOM$position, _p3, _p4));
+			});
 	});
-var _elm_lang$core$Set$partition = F2(
-	function (p, _p33) {
-		var _p34 = _p33;
-		var _p35 = A2(
-			_elm_lang$core$Dict$partition,
-			F2(
-				function (k, _p36) {
-					return p(k);
-				}),
-			_p34._0);
-		var p1 = _p35._0;
-		var p2 = _p35._1;
+var _debois$elm_dom$DOM$boundingClientRect = A4(
+	_elm_lang$core$Json_Decode$object3,
+	F3(
+		function (_p5, width, height) {
+			var _p6 = _p5;
+			return {top: _p6._1, left: _p6._0, width: width, height: height};
+		}),
+	A2(_debois$elm_dom$DOM$position, 0, 0),
+	_debois$elm_dom$DOM$offsetWidth,
+	_debois$elm_dom$DOM$offsetHeight);
+var _debois$elm_dom$DOM$target = function (decoder) {
+	return A2(_elm_lang$core$Json_Decode_ops[':='], 'target', decoder);
+};
+var _debois$elm_dom$DOM$Rectangle = F4(
+	function (a, b, c, d) {
+		return {top: a, left: b, width: c, height: d};
+	});
+
+var _debois$elm_parts$Parts$map2nd = F2(
+	function (f, _p0) {
+		var _p1 = _p0;
 		return {
 			ctor: '_Tuple2',
-			_0: _elm_lang$core$Set$Set_elm_builtin(p1),
-			_1: _elm_lang$core$Set$Set_elm_builtin(p2)
+			_0: _p1._0,
+			_1: f(_p1._1)
 		};
 	});
-
-var _elm_lang$dom$Native_Dom = function() {
-
-function on(node)
-{
-	return function(eventName, decoder, toTask)
-	{
-		return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
-
-			function performTask(event)
-			{
-				var result = A2(_elm_lang$core$Json_Decode$decodeValue, decoder, event);
-				if (result.ctor === 'Ok')
-				{
-					_elm_lang$core$Native_Scheduler.rawSpawn(toTask(result._0));
-				}
+var _debois$elm_parts$Parts$map1st = F2(
+	function (f, _p2) {
+		var _p3 = _p2;
+		return {
+			ctor: '_Tuple2',
+			_0: f(_p3._0),
+			_1: _p3._1
+		};
+	});
+var _debois$elm_parts$Parts$generalize = F4(
+	function (upd, f, m, c) {
+		return _elm_lang$core$Maybe$Just(
+			A2(
+				_debois$elm_parts$Parts$map2nd,
+				_elm_lang$core$Platform_Cmd$map(f),
+				A2(upd, m, c)));
+	});
+var _debois$elm_parts$Parts$update = F2(
+	function (_p4, c) {
+		var _p5 = _p4;
+		return A2(
+			_elm_lang$core$Maybe$withDefault,
+			{ctor: '_Tuple2', _0: c, _1: _elm_lang$core$Platform_Cmd$none},
+			_p5._0(c));
+	});
+var _debois$elm_parts$Parts$update$ = F2(
+	function (_p6, c) {
+		var _p7 = _p6;
+		return _p7._0(c);
+	});
+var _debois$elm_parts$Parts$indexed = F3(
+	function (get, set, model0) {
+		return {
+			ctor: '_Tuple2',
+			_0: F2(
+				function (idx, c) {
+					return A2(
+						_elm_lang$core$Maybe$withDefault,
+						model0,
+						A2(
+							_elm_lang$core$Dict$get,
+							idx,
+							get(c)));
+				}),
+			_1: F3(
+				function (idx, model, c) {
+					return A2(
+						set,
+						A3(
+							_elm_lang$core$Dict$insert,
+							idx,
+							model,
+							get(c)),
+						c);
+				})
+		};
+	});
+var _debois$elm_parts$Parts$accessors = F4(
+	function (get0, set0, model0, idx) {
+		var _p8 = A3(_debois$elm_parts$Parts$indexed, get0, set0, model0);
+		var get = _p8._0;
+		var set = _p8._1;
+		return {
+			get: get(idx),
+			set: set(idx),
+			map: F2(
+				function (f, c) {
+					return A3(
+						_elm_lang$core$Basics$flip,
+						set(idx),
+						c,
+						f(
+							A2(get, idx, c)));
+				}),
+			reset: function (c) {
+				return function (m) {
+					return A2(set0, m, c);
+				}(
+					A2(
+						_elm_lang$core$Dict$remove,
+						idx,
+						get0(c)));
 			}
-
-			node.addEventListener(eventName, performTask);
-
-			return function()
-			{
-				node.removeEventListener(eventName, performTask);
-			};
-		});
-	};
-}
-
-var rAF = typeof requestAnimationFrame !== 'undefined'
-	? requestAnimationFrame
-	: function(callback) { callback(); };
-
-function withNode(id, doStuff)
-{
-	return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
-	{
-		rAF(function()
-		{
-			var node = document.getElementById(id);
-			if (node === null)
-			{
-				callback(_elm_lang$core$Native_Scheduler.fail({ ctor: 'NotFound', _0: id }));
-				return;
-			}
-			callback(_elm_lang$core$Native_Scheduler.succeed(doStuff(node)));
-		});
+		};
 	});
-}
-
-
-// FOCUS
-
-function focus(id)
-{
-	return withNode(id, function(node) {
-		node.focus();
-		return _elm_lang$core$Native_Utils.Tuple0;
+var _debois$elm_parts$Parts$embedUpdate = F6(
+	function (get, set, update, f, msg, c) {
+		return A2(
+			_elm_lang$core$Maybe$map,
+			_debois$elm_parts$Parts$map1st(
+				A2(_elm_lang$core$Basics$flip, set, c)),
+			A3(
+				update,
+				f,
+				msg,
+				get(c)));
 	});
-}
-
-function blur(id)
-{
-	return withNode(id, function(node) {
-		node.blur();
-		return _elm_lang$core$Native_Utils.Tuple0;
+var _debois$elm_parts$Parts$embedView = F2(
+	function (get, view) {
+		return function (_p9) {
+			return view(
+				get(_p9));
+		};
 	});
-}
-
-
-// SCROLLING
-
-function getScrollTop(id)
-{
-	return withNode(id, function(node) {
-		return node.scrollTop;
+var _debois$elm_parts$Parts$Accessors = F4(
+	function (a, b, c, d) {
+		return {get: a, set: b, map: c, reset: d};
 	});
-}
-
-function setScrollTop(id, desiredScrollTop)
-{
-	return withNode(id, function(node) {
-		node.scrollTop = desiredScrollTop;
-		return _elm_lang$core$Native_Utils.Tuple0;
-	});
-}
-
-function toBottom(id)
-{
-	return withNode(id, function(node) {
-		node.scrollTop = node.scrollHeight;
-		return _elm_lang$core$Native_Utils.Tuple0;
-	});
-}
-
-function getScrollLeft(id)
-{
-	return withNode(id, function(node) {
-		return node.scrollLeft;
-	});
-}
-
-function setScrollLeft(id, desiredScrollLeft)
-{
-	return withNode(id, function(node) {
-		node.scrollLeft = desiredScrollLeft;
-		return _elm_lang$core$Native_Utils.Tuple0;
-	});
-}
-
-function toRight(id)
-{
-	return withNode(id, function(node) {
-		node.scrollLeft = node.scrollWidth;
-		return _elm_lang$core$Native_Utils.Tuple0;
-	});
-}
-
-
-// SIZE
-
-function width(options, id)
-{
-	return withNode(id, function(node) {
-		switch (options.ctor)
-		{
-			case 'Content':
-				return node.scrollWidth;
-			case 'VisibleContent':
-				return node.clientWidth;
-			case 'VisibleContentWithBorders':
-				return node.offsetWidth;
-			case 'VisibleContentWithBordersAndMargins':
-				var rect = node.getBoundingClientRect();
-				return rect.right - rect.left;
-		}
-	});
-}
-
-function height(options, id)
-{
-	return withNode(id, function(node) {
-		switch (options.ctor)
-		{
-			case 'Content':
-				return node.scrollHeight;
-			case 'VisibleContent':
-				return node.clientHeight;
-			case 'VisibleContentWithBorders':
-				return node.offsetHeight;
-			case 'VisibleContentWithBordersAndMargins':
-				var rect = node.getBoundingClientRect();
-				return rect.bottom - rect.top;
-		}
-	});
-}
-
-return {
-	onDocument: F3(on(document)),
-	onWindow: F3(on(window)),
-
-	focus: focus,
-	blur: blur,
-
-	getScrollTop: getScrollTop,
-	setScrollTop: F2(setScrollTop),
-	getScrollLeft: getScrollLeft,
-	setScrollLeft: F2(setScrollLeft),
-	toBottom: toBottom,
-	toRight: toRight,
-
-	height: F2(height),
-	width: F2(width)
+var _debois$elm_parts$Parts$Msg = function (a) {
+	return {ctor: 'Msg', _0: a};
 };
-
-}();
-
-var _elm_lang$dom$Dom_LowLevel$onWindow = _elm_lang$dom$Native_Dom.onWindow;
-var _elm_lang$dom$Dom_LowLevel$onDocument = _elm_lang$dom$Native_Dom.onDocument;
+var _debois$elm_parts$Parts$partial = F3(
+	function (fwd, upd, msg) {
+		return _debois$elm_parts$Parts$Msg(
+			function (c) {
+				return A3(
+					upd,
+					function (_p10) {
+						return fwd(
+							A3(_debois$elm_parts$Parts$partial, fwd, upd, _p10));
+					},
+					msg,
+					c);
+			});
+	});
+var _debois$elm_parts$Parts$pack = F5(
+	function (update, get0, set0, model0, fwd) {
+		var _p11 = A3(_debois$elm_parts$Parts$indexed, get0, set0, model0);
+		var get = _p11._0;
+		var set = _p11._1;
+		return function (idx) {
+			return function (_p12) {
+				return fwd(
+					A3(
+						_debois$elm_parts$Parts$partial,
+						fwd,
+						A3(
+							_debois$elm_parts$Parts$embedUpdate,
+							get(idx),
+							set(idx),
+							update),
+						_p12));
+			};
+		};
+	});
+var _debois$elm_parts$Parts$create = F6(
+	function (view, update, get0, set0, model0, fwd) {
+		var embeddedUpdate = A5(_debois$elm_parts$Parts$pack, update, get0, set0, model0, fwd);
+		var get = _elm_lang$core$Basics$fst(
+			A3(_debois$elm_parts$Parts$indexed, get0, set0, model0));
+		return F2(
+			function (idx, c) {
+				return A2(
+					view,
+					embeddedUpdate(idx),
+					A2(get, idx, c));
+			});
+	});
+var _debois$elm_parts$Parts$pack1 = F4(
+	function (update, get, set, fwd) {
+		return function (_p13) {
+			return fwd(
+				A3(
+					_debois$elm_parts$Parts$partial,
+					fwd,
+					A3(_debois$elm_parts$Parts$embedUpdate, get, set, update),
+					_p13));
+		};
+	});
+var _debois$elm_parts$Parts$create1 = F5(
+	function (view, update, get, set, fwd) {
+		var embeddedUpdate = function (_p14) {
+			return fwd(
+				A3(
+					_debois$elm_parts$Parts$partial,
+					fwd,
+					A3(_debois$elm_parts$Parts$embedUpdate, get, set, update),
+					_p14));
+		};
+		return A2(
+			_debois$elm_parts$Parts$embedView,
+			get,
+			view(embeddedUpdate));
+	});
 
 //import Native.Json //
 
@@ -8345,44 +7719,6 @@ var _elm_lang$html$Html$summary = _elm_lang$html$Html$node('summary');
 var _elm_lang$html$Html$menuitem = _elm_lang$html$Html$node('menuitem');
 var _elm_lang$html$Html$menu = _elm_lang$html$Html$node('menu');
 
-var _elm_lang$html$Html_App$programWithFlags = _elm_lang$virtual_dom$VirtualDom$programWithFlags;
-var _elm_lang$html$Html_App$program = function (app) {
-	return _elm_lang$html$Html_App$programWithFlags(
-		_elm_lang$core$Native_Utils.update(
-			app,
-			{
-				init: function (_p0) {
-					return app.init;
-				}
-			}));
-};
-var _elm_lang$html$Html_App$beginnerProgram = function (_p1) {
-	var _p2 = _p1;
-	return _elm_lang$html$Html_App$programWithFlags(
-		{
-			init: function (_p3) {
-				return A2(
-					_elm_lang$core$Platform_Cmd_ops['!'],
-					_p2.model,
-					_elm_lang$core$Native_List.fromArray(
-						[]));
-			},
-			update: F2(
-				function (msg, model) {
-					return A2(
-						_elm_lang$core$Platform_Cmd_ops['!'],
-						A2(_p2.update, msg, model),
-						_elm_lang$core$Native_List.fromArray(
-							[]));
-				}),
-			view: _p2.view,
-			subscriptions: function (_p4) {
-				return _elm_lang$core$Platform_Sub$none;
-			}
-		});
-};
-var _elm_lang$html$Html_App$map = _elm_lang$virtual_dom$VirtualDom$map;
-
 var _elm_lang$html$Html_Attributes$attribute = _elm_lang$virtual_dom$VirtualDom$attribute;
 var _elm_lang$html$Html_Attributes$contextmenu = function (value) {
 	return A2(_elm_lang$html$Html_Attributes$attribute, 'contextmenu', value);
@@ -8735,6 +8071,6091 @@ var _elm_lang$html$Html_Attributes$classList = function (list) {
 };
 var _elm_lang$html$Html_Attributes$style = _elm_lang$virtual_dom$VirtualDom$style;
 
+//import Native.Scheduler //
+
+var _elm_lang$core$Native_Time = function() {
+
+var now = _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
+{
+	callback(_elm_lang$core$Native_Scheduler.succeed(Date.now()));
+});
+
+function setInterval_(interval, task)
+{
+	return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
+	{
+		var id = setInterval(function() {
+			_elm_lang$core$Native_Scheduler.rawSpawn(task);
+		}, interval);
+
+		return function() { clearInterval(id); };
+	});
+}
+
+return {
+	now: now,
+	setInterval_: F2(setInterval_)
+};
+
+}();
+var _elm_lang$core$Task$onError = _elm_lang$core$Native_Scheduler.onError;
+var _elm_lang$core$Task$andThen = _elm_lang$core$Native_Scheduler.andThen;
+var _elm_lang$core$Task$spawnCmd = F2(
+	function (router, _p0) {
+		var _p1 = _p0;
+		return _elm_lang$core$Native_Scheduler.spawn(
+			A2(
+				_elm_lang$core$Task$andThen,
+				_p1._0,
+				_elm_lang$core$Platform$sendToApp(router)));
+	});
+var _elm_lang$core$Task$fail = _elm_lang$core$Native_Scheduler.fail;
+var _elm_lang$core$Task$mapError = F2(
+	function (f, task) {
+		return A2(
+			_elm_lang$core$Task$onError,
+			task,
+			function (err) {
+				return _elm_lang$core$Task$fail(
+					f(err));
+			});
+	});
+var _elm_lang$core$Task$succeed = _elm_lang$core$Native_Scheduler.succeed;
+var _elm_lang$core$Task$map = F2(
+	function (func, taskA) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			taskA,
+			function (a) {
+				return _elm_lang$core$Task$succeed(
+					func(a));
+			});
+	});
+var _elm_lang$core$Task$map2 = F3(
+	function (func, taskA, taskB) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			taskA,
+			function (a) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					taskB,
+					function (b) {
+						return _elm_lang$core$Task$succeed(
+							A2(func, a, b));
+					});
+			});
+	});
+var _elm_lang$core$Task$map3 = F4(
+	function (func, taskA, taskB, taskC) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			taskA,
+			function (a) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					taskB,
+					function (b) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							taskC,
+							function (c) {
+								return _elm_lang$core$Task$succeed(
+									A3(func, a, b, c));
+							});
+					});
+			});
+	});
+var _elm_lang$core$Task$map4 = F5(
+	function (func, taskA, taskB, taskC, taskD) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			taskA,
+			function (a) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					taskB,
+					function (b) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							taskC,
+							function (c) {
+								return A2(
+									_elm_lang$core$Task$andThen,
+									taskD,
+									function (d) {
+										return _elm_lang$core$Task$succeed(
+											A4(func, a, b, c, d));
+									});
+							});
+					});
+			});
+	});
+var _elm_lang$core$Task$map5 = F6(
+	function (func, taskA, taskB, taskC, taskD, taskE) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			taskA,
+			function (a) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					taskB,
+					function (b) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							taskC,
+							function (c) {
+								return A2(
+									_elm_lang$core$Task$andThen,
+									taskD,
+									function (d) {
+										return A2(
+											_elm_lang$core$Task$andThen,
+											taskE,
+											function (e) {
+												return _elm_lang$core$Task$succeed(
+													A5(func, a, b, c, d, e));
+											});
+									});
+							});
+					});
+			});
+	});
+var _elm_lang$core$Task$andMap = F2(
+	function (taskFunc, taskValue) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			taskFunc,
+			function (func) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					taskValue,
+					function (value) {
+						return _elm_lang$core$Task$succeed(
+							func(value));
+					});
+			});
+	});
+var _elm_lang$core$Task$sequence = function (tasks) {
+	var _p2 = tasks;
+	if (_p2.ctor === '[]') {
+		return _elm_lang$core$Task$succeed(
+			_elm_lang$core$Native_List.fromArray(
+				[]));
+	} else {
+		return A3(
+			_elm_lang$core$Task$map2,
+			F2(
+				function (x, y) {
+					return A2(_elm_lang$core$List_ops['::'], x, y);
+				}),
+			_p2._0,
+			_elm_lang$core$Task$sequence(_p2._1));
+	}
+};
+var _elm_lang$core$Task$onEffects = F3(
+	function (router, commands, state) {
+		return A2(
+			_elm_lang$core$Task$map,
+			function (_p3) {
+				return {ctor: '_Tuple0'};
+			},
+			_elm_lang$core$Task$sequence(
+				A2(
+					_elm_lang$core$List$map,
+					_elm_lang$core$Task$spawnCmd(router),
+					commands)));
+	});
+var _elm_lang$core$Task$toMaybe = function (task) {
+	return A2(
+		_elm_lang$core$Task$onError,
+		A2(_elm_lang$core$Task$map, _elm_lang$core$Maybe$Just, task),
+		function (_p4) {
+			return _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
+		});
+};
+var _elm_lang$core$Task$fromMaybe = F2(
+	function ($default, maybe) {
+		var _p5 = maybe;
+		if (_p5.ctor === 'Just') {
+			return _elm_lang$core$Task$succeed(_p5._0);
+		} else {
+			return _elm_lang$core$Task$fail($default);
+		}
+	});
+var _elm_lang$core$Task$toResult = function (task) {
+	return A2(
+		_elm_lang$core$Task$onError,
+		A2(_elm_lang$core$Task$map, _elm_lang$core$Result$Ok, task),
+		function (msg) {
+			return _elm_lang$core$Task$succeed(
+				_elm_lang$core$Result$Err(msg));
+		});
+};
+var _elm_lang$core$Task$fromResult = function (result) {
+	var _p6 = result;
+	if (_p6.ctor === 'Ok') {
+		return _elm_lang$core$Task$succeed(_p6._0);
+	} else {
+		return _elm_lang$core$Task$fail(_p6._0);
+	}
+};
+var _elm_lang$core$Task$init = _elm_lang$core$Task$succeed(
+	{ctor: '_Tuple0'});
+var _elm_lang$core$Task$onSelfMsg = F3(
+	function (_p9, _p8, _p7) {
+		return _elm_lang$core$Task$succeed(
+			{ctor: '_Tuple0'});
+	});
+var _elm_lang$core$Task$command = _elm_lang$core$Native_Platform.leaf('Task');
+var _elm_lang$core$Task$T = function (a) {
+	return {ctor: 'T', _0: a};
+};
+var _elm_lang$core$Task$perform = F3(
+	function (onFail, onSuccess, task) {
+		return _elm_lang$core$Task$command(
+			_elm_lang$core$Task$T(
+				A2(
+					_elm_lang$core$Task$onError,
+					A2(_elm_lang$core$Task$map, onSuccess, task),
+					function (x) {
+						return _elm_lang$core$Task$succeed(
+							onFail(x));
+					})));
+	});
+var _elm_lang$core$Task$cmdMap = F2(
+	function (tagger, _p10) {
+		var _p11 = _p10;
+		return _elm_lang$core$Task$T(
+			A2(_elm_lang$core$Task$map, tagger, _p11._0));
+	});
+_elm_lang$core$Native_Platform.effectManagers['Task'] = {pkg: 'elm-lang/core', init: _elm_lang$core$Task$init, onEffects: _elm_lang$core$Task$onEffects, onSelfMsg: _elm_lang$core$Task$onSelfMsg, tag: 'cmd', cmdMap: _elm_lang$core$Task$cmdMap};
+
+var _elm_lang$core$Time$setInterval = _elm_lang$core$Native_Time.setInterval_;
+var _elm_lang$core$Time$spawnHelp = F3(
+	function (router, intervals, processes) {
+		var _p0 = intervals;
+		if (_p0.ctor === '[]') {
+			return _elm_lang$core$Task$succeed(processes);
+		} else {
+			var _p1 = _p0._0;
+			return A2(
+				_elm_lang$core$Task$andThen,
+				_elm_lang$core$Native_Scheduler.spawn(
+					A2(
+						_elm_lang$core$Time$setInterval,
+						_p1,
+						A2(_elm_lang$core$Platform$sendToSelf, router, _p1))),
+				function (id) {
+					return A3(
+						_elm_lang$core$Time$spawnHelp,
+						router,
+						_p0._1,
+						A3(_elm_lang$core$Dict$insert, _p1, id, processes));
+				});
+		}
+	});
+var _elm_lang$core$Time$addMySub = F2(
+	function (_p2, state) {
+		var _p3 = _p2;
+		var _p6 = _p3._1;
+		var _p5 = _p3._0;
+		var _p4 = A2(_elm_lang$core$Dict$get, _p5, state);
+		if (_p4.ctor === 'Nothing') {
+			return A3(
+				_elm_lang$core$Dict$insert,
+				_p5,
+				_elm_lang$core$Native_List.fromArray(
+					[_p6]),
+				state);
+		} else {
+			return A3(
+				_elm_lang$core$Dict$insert,
+				_p5,
+				A2(_elm_lang$core$List_ops['::'], _p6, _p4._0),
+				state);
+		}
+	});
+var _elm_lang$core$Time$inMilliseconds = function (t) {
+	return t;
+};
+var _elm_lang$core$Time$millisecond = 1;
+var _elm_lang$core$Time$second = 1000 * _elm_lang$core$Time$millisecond;
+var _elm_lang$core$Time$minute = 60 * _elm_lang$core$Time$second;
+var _elm_lang$core$Time$hour = 60 * _elm_lang$core$Time$minute;
+var _elm_lang$core$Time$inHours = function (t) {
+	return t / _elm_lang$core$Time$hour;
+};
+var _elm_lang$core$Time$inMinutes = function (t) {
+	return t / _elm_lang$core$Time$minute;
+};
+var _elm_lang$core$Time$inSeconds = function (t) {
+	return t / _elm_lang$core$Time$second;
+};
+var _elm_lang$core$Time$now = _elm_lang$core$Native_Time.now;
+var _elm_lang$core$Time$onSelfMsg = F3(
+	function (router, interval, state) {
+		var _p7 = A2(_elm_lang$core$Dict$get, interval, state.taggers);
+		if (_p7.ctor === 'Nothing') {
+			return _elm_lang$core$Task$succeed(state);
+		} else {
+			return A2(
+				_elm_lang$core$Task$andThen,
+				_elm_lang$core$Time$now,
+				function (time) {
+					return A2(
+						_elm_lang$core$Task$andThen,
+						_elm_lang$core$Task$sequence(
+							A2(
+								_elm_lang$core$List$map,
+								function (tagger) {
+									return A2(
+										_elm_lang$core$Platform$sendToApp,
+										router,
+										tagger(time));
+								},
+								_p7._0)),
+						function (_p8) {
+							return _elm_lang$core$Task$succeed(state);
+						});
+				});
+		}
+	});
+var _elm_lang$core$Time$subscription = _elm_lang$core$Native_Platform.leaf('Time');
+var _elm_lang$core$Time$State = F2(
+	function (a, b) {
+		return {taggers: a, processes: b};
+	});
+var _elm_lang$core$Time$init = _elm_lang$core$Task$succeed(
+	A2(_elm_lang$core$Time$State, _elm_lang$core$Dict$empty, _elm_lang$core$Dict$empty));
+var _elm_lang$core$Time$onEffects = F3(
+	function (router, subs, _p9) {
+		var _p10 = _p9;
+		var rightStep = F3(
+			function (_p12, id, _p11) {
+				var _p13 = _p11;
+				return {
+					ctor: '_Tuple3',
+					_0: _p13._0,
+					_1: _p13._1,
+					_2: A2(
+						_elm_lang$core$Task$andThen,
+						_elm_lang$core$Native_Scheduler.kill(id),
+						function (_p14) {
+							return _p13._2;
+						})
+				};
+			});
+		var bothStep = F4(
+			function (interval, taggers, id, _p15) {
+				var _p16 = _p15;
+				return {
+					ctor: '_Tuple3',
+					_0: _p16._0,
+					_1: A3(_elm_lang$core$Dict$insert, interval, id, _p16._1),
+					_2: _p16._2
+				};
+			});
+		var leftStep = F3(
+			function (interval, taggers, _p17) {
+				var _p18 = _p17;
+				return {
+					ctor: '_Tuple3',
+					_0: A2(_elm_lang$core$List_ops['::'], interval, _p18._0),
+					_1: _p18._1,
+					_2: _p18._2
+				};
+			});
+		var newTaggers = A3(_elm_lang$core$List$foldl, _elm_lang$core$Time$addMySub, _elm_lang$core$Dict$empty, subs);
+		var _p19 = A6(
+			_elm_lang$core$Dict$merge,
+			leftStep,
+			bothStep,
+			rightStep,
+			newTaggers,
+			_p10.processes,
+			{
+				ctor: '_Tuple3',
+				_0: _elm_lang$core$Native_List.fromArray(
+					[]),
+				_1: _elm_lang$core$Dict$empty,
+				_2: _elm_lang$core$Task$succeed(
+					{ctor: '_Tuple0'})
+			});
+		var spawnList = _p19._0;
+		var existingDict = _p19._1;
+		var killTask = _p19._2;
+		return A2(
+			_elm_lang$core$Task$andThen,
+			killTask,
+			function (_p20) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					A3(_elm_lang$core$Time$spawnHelp, router, spawnList, existingDict),
+					function (newProcesses) {
+						return _elm_lang$core$Task$succeed(
+							A2(_elm_lang$core$Time$State, newTaggers, newProcesses));
+					});
+			});
+	});
+var _elm_lang$core$Time$Every = F2(
+	function (a, b) {
+		return {ctor: 'Every', _0: a, _1: b};
+	});
+var _elm_lang$core$Time$every = F2(
+	function (interval, tagger) {
+		return _elm_lang$core$Time$subscription(
+			A2(_elm_lang$core$Time$Every, interval, tagger));
+	});
+var _elm_lang$core$Time$subMap = F2(
+	function (f, _p21) {
+		var _p22 = _p21;
+		return A2(
+			_elm_lang$core$Time$Every,
+			_p22._0,
+			function (_p23) {
+				return f(
+					_p22._1(_p23));
+			});
+	});
+_elm_lang$core$Native_Platform.effectManagers['Time'] = {pkg: 'elm-lang/core', init: _elm_lang$core$Time$init, onEffects: _elm_lang$core$Time$onEffects, onSelfMsg: _elm_lang$core$Time$onSelfMsg, tag: 'sub', subMap: _elm_lang$core$Time$subMap};
+
+var _elm_lang$core$Process$kill = _elm_lang$core$Native_Scheduler.kill;
+var _elm_lang$core$Process$sleep = _elm_lang$core$Native_Scheduler.sleep;
+var _elm_lang$core$Process$spawn = _elm_lang$core$Native_Scheduler.spawn;
+
+var _debois$elm_mdl$Material_Helpers$noAttr = A2(_elm_lang$html$Html_Attributes$attribute, 'data-elm-mdl-noop', '');
+var _debois$elm_mdl$Material_Helpers$aria = F2(
+	function (name, value) {
+		return value ? A2(
+			_elm_lang$html$Html_Attributes$attribute,
+			A2(_elm_lang$core$Basics_ops['++'], 'aria-', name),
+			'true') : _debois$elm_mdl$Material_Helpers$noAttr;
+	});
+var _debois$elm_mdl$Material_Helpers$delay = F2(
+	function (t, x) {
+		return A3(
+			_elm_lang$core$Task$perform,
+			_elm_lang$core$Basics$always(x),
+			_elm_lang$core$Basics$always(x),
+			_elm_lang$core$Process$sleep(t));
+	});
+var _debois$elm_mdl$Material_Helpers$cssTransitionStep = function (x) {
+	return A2(_debois$elm_mdl$Material_Helpers$delay, 50, x);
+};
+var _debois$elm_mdl$Material_Helpers$cmd = function (msg) {
+	return A3(
+		_elm_lang$core$Task$perform,
+		_elm_lang$core$Basics$always(msg),
+		_elm_lang$core$Basics$always(msg),
+		_elm_lang$core$Task$succeed(msg));
+};
+var _debois$elm_mdl$Material_Helpers$lift = F6(
+	function (get, set, fwd, update, action, model) {
+		var _p0 = A2(
+			update,
+			action,
+			get(model));
+		var submodel$ = _p0._0;
+		var e = _p0._1;
+		return {
+			ctor: '_Tuple2',
+			_0: A2(set, model, submodel$),
+			_1: A2(_elm_lang$core$Platform_Cmd$map, fwd, e)
+		};
+	});
+var _debois$elm_mdl$Material_Helpers$lift$ = F5(
+	function (get, set, update, action, model) {
+		return {
+			ctor: '_Tuple2',
+			_0: A2(
+				set,
+				model,
+				A2(
+					update,
+					action,
+					get(model))),
+			_1: _elm_lang$core$Platform_Cmd$none
+		};
+	});
+var _debois$elm_mdl$Material_Helpers$map2nd = F2(
+	function (f, _p1) {
+		var _p2 = _p1;
+		return {
+			ctor: '_Tuple2',
+			_0: _p2._0,
+			_1: f(_p2._1)
+		};
+	});
+var _debois$elm_mdl$Material_Helpers$map1st = F2(
+	function (f, _p3) {
+		var _p4 = _p3;
+		return {
+			ctor: '_Tuple2',
+			_0: f(_p4._0),
+			_1: _p4._1
+		};
+	});
+var _debois$elm_mdl$Material_Helpers$blurOn = function (evt) {
+	return A2(
+		_elm_lang$html$Html_Attributes$attribute,
+		A2(_elm_lang$core$Basics_ops['++'], 'on', evt),
+		'this.blur()');
+};
+var _debois$elm_mdl$Material_Helpers$effect = F2(
+	function (e, x) {
+		return {ctor: '_Tuple2', _0: x, _1: e};
+	});
+var _debois$elm_mdl$Material_Helpers$pure = _debois$elm_mdl$Material_Helpers$effect(_elm_lang$core$Platform_Cmd$none);
+var _debois$elm_mdl$Material_Helpers$filter = F3(
+	function (elem, attr, html) {
+		return A2(
+			elem,
+			attr,
+			A2(
+				_elm_lang$core$List$filterMap,
+				function (x) {
+					return x;
+				},
+				html));
+	});
+
+var _elm_lang$html$Html_Events$keyCode = A2(_elm_lang$core$Json_Decode_ops[':='], 'keyCode', _elm_lang$core$Json_Decode$int);
+var _elm_lang$html$Html_Events$targetChecked = A2(
+	_elm_lang$core$Json_Decode$at,
+	_elm_lang$core$Native_List.fromArray(
+		['target', 'checked']),
+	_elm_lang$core$Json_Decode$bool);
+var _elm_lang$html$Html_Events$targetValue = A2(
+	_elm_lang$core$Json_Decode$at,
+	_elm_lang$core$Native_List.fromArray(
+		['target', 'value']),
+	_elm_lang$core$Json_Decode$string);
+var _elm_lang$html$Html_Events$defaultOptions = _elm_lang$virtual_dom$VirtualDom$defaultOptions;
+var _elm_lang$html$Html_Events$onWithOptions = _elm_lang$virtual_dom$VirtualDom$onWithOptions;
+var _elm_lang$html$Html_Events$on = _elm_lang$virtual_dom$VirtualDom$on;
+var _elm_lang$html$Html_Events$onFocus = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'focus',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onBlur = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'blur',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onSubmitOptions = _elm_lang$core$Native_Utils.update(
+	_elm_lang$html$Html_Events$defaultOptions,
+	{preventDefault: true});
+var _elm_lang$html$Html_Events$onSubmit = function (msg) {
+	return A3(
+		_elm_lang$html$Html_Events$onWithOptions,
+		'submit',
+		_elm_lang$html$Html_Events$onSubmitOptions,
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onCheck = function (tagger) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'change',
+		A2(_elm_lang$core$Json_Decode$map, tagger, _elm_lang$html$Html_Events$targetChecked));
+};
+var _elm_lang$html$Html_Events$onInput = function (tagger) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'input',
+		A2(_elm_lang$core$Json_Decode$map, tagger, _elm_lang$html$Html_Events$targetValue));
+};
+var _elm_lang$html$Html_Events$onMouseOut = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseout',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseOver = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseover',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseLeave = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseleave',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseEnter = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseenter',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseUp = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseup',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseDown = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mousedown',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onDoubleClick = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'dblclick',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onClick = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'click',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$Options = F2(
+	function (a, b) {
+		return {stopPropagation: a, preventDefault: b};
+	});
+
+var _elm_lang$html$Html_App$programWithFlags = _elm_lang$virtual_dom$VirtualDom$programWithFlags;
+var _elm_lang$html$Html_App$program = function (app) {
+	return _elm_lang$html$Html_App$programWithFlags(
+		_elm_lang$core$Native_Utils.update(
+			app,
+			{
+				init: function (_p0) {
+					return app.init;
+				}
+			}));
+};
+var _elm_lang$html$Html_App$beginnerProgram = function (_p1) {
+	var _p2 = _p1;
+	return _elm_lang$html$Html_App$programWithFlags(
+		{
+			init: function (_p3) {
+				return A2(
+					_elm_lang$core$Platform_Cmd_ops['!'],
+					_p2.model,
+					_elm_lang$core$Native_List.fromArray(
+						[]));
+			},
+			update: F2(
+				function (msg, model) {
+					return A2(
+						_elm_lang$core$Platform_Cmd_ops['!'],
+						A2(_p2.update, msg, model),
+						_elm_lang$core$Native_List.fromArray(
+							[]));
+				}),
+			view: _p2.view,
+			subscriptions: function (_p4) {
+				return _elm_lang$core$Platform_Sub$none;
+			}
+		});
+};
+var _elm_lang$html$Html_App$map = _elm_lang$virtual_dom$VirtualDom$map;
+
+var _debois$elm_mdl$Material_Options_Internal$None = {ctor: 'None'};
+var _debois$elm_mdl$Material_Options_Internal$Set = function (a) {
+	return {ctor: 'Set', _0: a};
+};
+var _debois$elm_mdl$Material_Options_Internal$Many = function (a) {
+	return {ctor: 'Many', _0: a};
+};
+var _debois$elm_mdl$Material_Options_Internal$Attribute = function (a) {
+	return {ctor: 'Attribute', _0: a};
+};
+var _debois$elm_mdl$Material_Options_Internal$attribute = _debois$elm_mdl$Material_Options_Internal$Attribute;
+var _debois$elm_mdl$Material_Options_Internal$CSS = function (a) {
+	return {ctor: 'CSS', _0: a};
+};
+var _debois$elm_mdl$Material_Options_Internal$Class = function (a) {
+	return {ctor: 'Class', _0: a};
+};
+
+var _debois$elm_mdl$Material_Options$id = function (_p0) {
+	return _debois$elm_mdl$Material_Options_Internal$Attribute(
+		_elm_lang$html$Html_Attributes$id(_p0));
+};
+var _debois$elm_mdl$Material_Options$attribute = _debois$elm_mdl$Material_Options_Internal$Attribute;
+var _debois$elm_mdl$Material_Options$stylesheet = function (css) {
+	return A3(
+		_elm_lang$html$Html$node,
+		'style',
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		_elm_lang$core$Native_List.fromArray(
+			[
+				_elm_lang$html$Html$text(css)
+			]));
+};
+var _debois$elm_mdl$Material_Options$data = F2(
+	function (key, val) {
+		return _debois$elm_mdl$Material_Options_Internal$Attribute(
+			A2(
+				_elm_lang$html$Html_Attributes$attribute,
+				A2(_elm_lang$core$Basics_ops['++'], 'data-', key),
+				val));
+	});
+var _debois$elm_mdl$Material_Options$set = _debois$elm_mdl$Material_Options_Internal$Set;
+var _debois$elm_mdl$Material_Options$inner = function (options) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (c) {
+			return _elm_lang$core$Native_Utils.update(
+				c,
+				{
+					inner: A2(_elm_lang$core$Basics_ops['++'], options, c.inner)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Options$nop = _debois$elm_mdl$Material_Options_Internal$None;
+var _debois$elm_mdl$Material_Options$when = F2(
+	function (prop, guard) {
+		return guard ? prop : _debois$elm_mdl$Material_Options$nop;
+	});
+var _debois$elm_mdl$Material_Options$maybe = function (prop) {
+	return A2(_elm_lang$core$Maybe$withDefault, _debois$elm_mdl$Material_Options$nop, prop);
+};
+var _debois$elm_mdl$Material_Options$many = _debois$elm_mdl$Material_Options_Internal$Many;
+var _debois$elm_mdl$Material_Options$css = F2(
+	function (key, value) {
+		return _debois$elm_mdl$Material_Options_Internal$CSS(
+			{ctor: '_Tuple2', _0: key, _1: value});
+	});
+var _debois$elm_mdl$Material_Options$center = _debois$elm_mdl$Material_Options$many(
+	_elm_lang$core$Native_List.fromArray(
+		[
+			A2(_debois$elm_mdl$Material_Options$css, 'display', 'flex'),
+			A2(_debois$elm_mdl$Material_Options$css, 'align-items', 'center'),
+			A2(_debois$elm_mdl$Material_Options$css, 'justify-content', 'center')
+		]));
+var _debois$elm_mdl$Material_Options$scrim = function (opacity) {
+	return A2(
+		_debois$elm_mdl$Material_Options$css,
+		'background',
+		A2(
+			_elm_lang$core$Basics_ops['++'],
+			'linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, ',
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				_elm_lang$core$Basics$toString(opacity),
+				'))')));
+};
+var _debois$elm_mdl$Material_Options$cs = function (c) {
+	return _debois$elm_mdl$Material_Options_Internal$Class(c);
+};
+var _debois$elm_mdl$Material_Options$disabled = function (v) {
+	return _debois$elm_mdl$Material_Options_Internal$Attribute(
+		_elm_lang$html$Html_Attributes$disabled(v));
+};
+var _debois$elm_mdl$Material_Options$addAttributes = F2(
+	function (summary, attrs) {
+		return A2(
+			_elm_lang$core$List$append,
+			attrs,
+			A2(
+				_elm_lang$core$List_ops['::'],
+				_elm_lang$html$Html_Attributes$style(summary.css),
+				A2(
+					_elm_lang$core$List_ops['::'],
+					_elm_lang$html$Html_Attributes$class(
+						A2(_elm_lang$core$String$join, ' ', summary.classes)),
+					summary.attrs)));
+	});
+var _debois$elm_mdl$Material_Options$collect1$ = F2(
+	function (options, acc) {
+		var _p1 = options;
+		switch (_p1.ctor) {
+			case 'Class':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						classes: A2(_elm_lang$core$List_ops['::'], _p1._0, acc.classes)
+					});
+			case 'CSS':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						css: A2(_elm_lang$core$List_ops['::'], _p1._0, acc.css)
+					});
+			case 'Attribute':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						attrs: A2(_elm_lang$core$List_ops['::'], _p1._0, acc.attrs)
+					});
+			case 'Many':
+				return A3(_elm_lang$core$List$foldl, _debois$elm_mdl$Material_Options$collect1$, acc, _p1._0);
+			case 'Set':
+				return acc;
+			default:
+				return acc;
+		}
+	});
+var _debois$elm_mdl$Material_Options$collect1 = F2(
+	function (option, acc) {
+		var _p2 = option;
+		switch (_p2.ctor) {
+			case 'Class':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						classes: A2(_elm_lang$core$List_ops['::'], _p2._0, acc.classes)
+					});
+			case 'CSS':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						css: A2(_elm_lang$core$List_ops['::'], _p2._0, acc.css)
+					});
+			case 'Attribute':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						attrs: A2(_elm_lang$core$List_ops['::'], _p2._0, acc.attrs)
+					});
+			case 'Many':
+				return A3(_elm_lang$core$List$foldl, _debois$elm_mdl$Material_Options$collect1, acc, _p2._0);
+			case 'Set':
+				return _elm_lang$core$Native_Utils.update(
+					acc,
+					{
+						config: _p2._0(acc.config)
+					});
+			default:
+				return acc;
+		}
+	});
+var _debois$elm_mdl$Material_Options$recollect = _elm_lang$core$List$foldl(_debois$elm_mdl$Material_Options$collect1);
+var _debois$elm_mdl$Material_Options$apply = F4(
+	function (summary, ctor, options, attrs) {
+		return ctor(
+			A2(
+				_debois$elm_mdl$Material_Options$addAttributes,
+				A2(_debois$elm_mdl$Material_Options$recollect, summary, options),
+				attrs));
+	});
+var _debois$elm_mdl$Material_Options$Summary = F4(
+	function (a, b, c, d) {
+		return {classes: a, css: b, attrs: c, config: d};
+	});
+var _debois$elm_mdl$Material_Options$collect = function (_p3) {
+	return _debois$elm_mdl$Material_Options$recollect(
+		A4(
+			_debois$elm_mdl$Material_Options$Summary,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_p3));
+};
+var _debois$elm_mdl$Material_Options$collect$ = A2(
+	_elm_lang$core$List$foldl,
+	_debois$elm_mdl$Material_Options$collect1$,
+	A4(
+		_debois$elm_mdl$Material_Options$Summary,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		{ctor: '_Tuple0'}));
+var _debois$elm_mdl$Material_Options$styled = F2(
+	function (ctor, props) {
+		return ctor(
+			A2(
+				_debois$elm_mdl$Material_Options$addAttributes,
+				_debois$elm_mdl$Material_Options$collect$(props),
+				_elm_lang$core$Native_List.fromArray(
+					[])));
+	});
+var _debois$elm_mdl$Material_Options$div = _debois$elm_mdl$Material_Options$styled(_elm_lang$html$Html$div);
+var _debois$elm_mdl$Material_Options$span = _debois$elm_mdl$Material_Options$styled(_elm_lang$html$Html$span);
+var _debois$elm_mdl$Material_Options$styled$ = F3(
+	function (ctor, props, attrs) {
+		return ctor(
+			A2(
+				_debois$elm_mdl$Material_Options$addAttributes,
+				_debois$elm_mdl$Material_Options$collect$(props),
+				attrs));
+	});
+var _debois$elm_mdl$Material_Options$img = F2(
+	function (options, attrs) {
+		return A4(
+			_debois$elm_mdl$Material_Options$styled$,
+			_elm_lang$html$Html$img,
+			options,
+			attrs,
+			_elm_lang$core$Native_List.fromArray(
+				[]));
+	});
+
+var _debois$elm_mdl$Material_Ripple$styles = F2(
+	function (m, frame) {
+		var r = m.rect;
+		var toPx = function (k) {
+			return A2(
+				_elm_lang$core$Basics_ops['++'],
+				_elm_lang$core$Basics$toString(
+					_elm_lang$core$Basics$round(k)),
+				'px');
+		};
+		var offset = A2(
+			_elm_lang$core$Basics_ops['++'],
+			'translate(',
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				toPx(m.x),
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					', ',
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						toPx(m.y),
+						')'))));
+		var rippleSize = toPx(
+			(_elm_lang$core$Basics$sqrt((r.width * r.width) + (r.height * r.height)) * 2.0) + 2.0);
+		var scale = _elm_lang$core$Native_Utils.eq(frame, 0) ? 'scale(0.0001, 0.0001)' : '';
+		var transformString = A2(
+			_elm_lang$core$Basics_ops['++'],
+			'translate(-50%, -50%) ',
+			A2(_elm_lang$core$Basics_ops['++'], offset, scale));
+		return _elm_lang$core$Native_List.fromArray(
+			[
+				{ctor: '_Tuple2', _0: 'width', _1: rippleSize},
+				{ctor: '_Tuple2', _0: 'height', _1: rippleSize},
+				{ctor: '_Tuple2', _0: '-webkit-transform', _1: transformString},
+				{ctor: '_Tuple2', _0: '-ms-transform', _1: transformString},
+				{ctor: '_Tuple2', _0: 'transform', _1: transformString}
+			]);
+	});
+var _debois$elm_mdl$Material_Ripple$Metrics = F3(
+	function (a, b, c) {
+		return {rect: a, x: b, y: c};
+	});
+var _debois$elm_mdl$Material_Ripple$computeMetrics = function (g) {
+	var rect = g.rect;
+	var set = F2(
+		function (x, y) {
+			return _elm_lang$core$Maybe$Just(
+				{ctor: '_Tuple2', _0: x - rect.left, _1: y - rect.top});
+		});
+	return A2(
+		_elm_lang$core$Maybe$map,
+		function (_p0) {
+			var _p1 = _p0;
+			return A3(_debois$elm_mdl$Material_Ripple$Metrics, rect, _p1._0, _p1._1);
+		},
+		function () {
+			var _p2 = {ctor: '_Tuple4', _0: g.clientX, _1: g.clientY, _2: g.touchX, _3: g.touchY};
+			_v1_3:
+			do {
+				if (_p2.ctor === '_Tuple4') {
+					if ((_p2._0.ctor === 'Just') && (_p2._1.ctor === 'Just')) {
+						if ((_p2._0._0 === 0.0) && (_p2._1._0 === 0.0)) {
+							return _elm_lang$core$Maybe$Just(
+								{ctor: '_Tuple2', _0: rect.width / 2.0, _1: rect.height / 2.0});
+						} else {
+							return A2(set, _p2._0._0, _p2._1._0);
+						}
+					} else {
+						if ((_p2._2.ctor === 'Just') && (_p2._3.ctor === 'Just')) {
+							return A2(set, _p2._2._0, _p2._3._0);
+						} else {
+							break _v1_3;
+						}
+					}
+				} else {
+					break _v1_3;
+				}
+			} while(false);
+			return _elm_lang$core$Maybe$Nothing;
+		}());
+};
+var _debois$elm_mdl$Material_Ripple$Model = F3(
+	function (a, b, c) {
+		return {animation: a, metrics: b, ignoringMouseDown: c};
+	});
+var _debois$elm_mdl$Material_Ripple$DOMState = F6(
+	function (a, b, c, d, e, f) {
+		return {rect: a, clientX: b, clientY: c, touchX: d, touchY: e, type$: f};
+	});
+var _debois$elm_mdl$Material_Ripple$geometryDecoder = A7(
+	_elm_lang$core$Json_Decode$object6,
+	_debois$elm_mdl$Material_Ripple$DOMState,
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'currentTarget', _debois$elm_dom$DOM$boundingClientRect),
+	_elm_lang$core$Json_Decode$maybe(
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'clientX', _elm_lang$core$Json_Decode$float)),
+	_elm_lang$core$Json_Decode$maybe(
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'clientY', _elm_lang$core$Json_Decode$float)),
+	_elm_lang$core$Json_Decode$maybe(
+		A2(
+			_elm_lang$core$Json_Decode$at,
+			_elm_lang$core$Native_List.fromArray(
+				['touches', '0', 'clientX']),
+			_elm_lang$core$Json_Decode$float)),
+	_elm_lang$core$Json_Decode$maybe(
+		A2(
+			_elm_lang$core$Json_Decode$at,
+			_elm_lang$core$Native_List.fromArray(
+				['touches', '0', 'clientY']),
+			_elm_lang$core$Json_Decode$float)),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'type', _elm_lang$core$Json_Decode$string));
+var _debois$elm_mdl$Material_Ripple$Inert = {ctor: 'Inert'};
+var _debois$elm_mdl$Material_Ripple$model = {animation: _debois$elm_mdl$Material_Ripple$Inert, metrics: _elm_lang$core$Maybe$Nothing, ignoringMouseDown: false};
+var _debois$elm_mdl$Material_Ripple$Frame = function (a) {
+	return {ctor: 'Frame', _0: a};
+};
+var _debois$elm_mdl$Material_Ripple$view$ = F2(
+	function (attrs, model) {
+		var styling = function () {
+			var _p3 = {ctor: '_Tuple2', _0: model.metrics, _1: model.animation};
+			if ((_p3.ctor === '_Tuple2') && (_p3._0.ctor === 'Just')) {
+				if (_p3._1.ctor === 'Frame') {
+					return A2(_debois$elm_mdl$Material_Ripple$styles, _p3._0._0, _p3._1._0);
+				} else {
+					return A2(_debois$elm_mdl$Material_Ripple$styles, _p3._0._0, 1);
+				}
+			} else {
+				return _elm_lang$core$Native_List.fromArray(
+					[]);
+			}
+		}();
+		return A2(
+			_elm_lang$html$Html$span,
+			attrs,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$classList(
+							_elm_lang$core$Native_List.fromArray(
+								[
+									{ctor: '_Tuple2', _0: 'mdl-ripple', _1: true},
+									{
+									ctor: '_Tuple2',
+									_0: 'is-animating',
+									_1: !_elm_lang$core$Native_Utils.eq(
+										model.animation,
+										_debois$elm_mdl$Material_Ripple$Frame(0))
+								},
+									{
+									ctor: '_Tuple2',
+									_0: 'is-visible',
+									_1: !_elm_lang$core$Native_Utils.eq(model.animation, _debois$elm_mdl$Material_Ripple$Inert)
+								}
+								])),
+							_elm_lang$html$Html_Attributes$style(styling)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[]))
+				]));
+	});
+var _debois$elm_mdl$Material_Ripple$Tick = {ctor: 'Tick'};
+var _debois$elm_mdl$Material_Ripple$update = F2(
+	function (action, model) {
+		var _p4 = action;
+		switch (_p4.ctor) {
+			case 'Down':
+				var _p5 = _p4._0;
+				return (_elm_lang$core$Native_Utils.eq(_p5.type$, 'mousedown') && model.ignoringMouseDown) ? _debois$elm_mdl$Material_Helpers$pure(
+					_elm_lang$core$Native_Utils.update(
+						model,
+						{ignoringMouseDown: false})) : A2(
+					_debois$elm_mdl$Material_Helpers$effect,
+					_debois$elm_mdl$Material_Helpers$cssTransitionStep(_debois$elm_mdl$Material_Ripple$Tick),
+					_elm_lang$core$Native_Utils.update(
+						model,
+						{
+							animation: _debois$elm_mdl$Material_Ripple$Frame(0),
+							metrics: _debois$elm_mdl$Material_Ripple$computeMetrics(_p5),
+							ignoringMouseDown: _elm_lang$core$Native_Utils.eq(_p5.type$, 'touchstart') ? true : model.ignoringMouseDown
+						}));
+			case 'Up':
+				return _debois$elm_mdl$Material_Helpers$pure(
+					_elm_lang$core$Native_Utils.update(
+						model,
+						{animation: _debois$elm_mdl$Material_Ripple$Inert}));
+			default:
+				return _elm_lang$core$Native_Utils.eq(
+					model.animation,
+					_debois$elm_mdl$Material_Ripple$Frame(0)) ? _debois$elm_mdl$Material_Helpers$pure(
+					_elm_lang$core$Native_Utils.update(
+						model,
+						{
+							animation: _debois$elm_mdl$Material_Ripple$Frame(1)
+						})) : _debois$elm_mdl$Material_Helpers$pure(model);
+		}
+	});
+var _debois$elm_mdl$Material_Ripple$Up = {ctor: 'Up'};
+var _debois$elm_mdl$Material_Ripple$upOn$ = F2(
+	function (f, name) {
+		return A2(
+			_elm_lang$html$Html_Events$on,
+			name,
+			_elm_lang$core$Json_Decode$succeed(
+				f(_debois$elm_mdl$Material_Ripple$Up)));
+	});
+var _debois$elm_mdl$Material_Ripple$upOn = _debois$elm_mdl$Material_Ripple$upOn$(_elm_lang$core$Basics$identity);
+var _debois$elm_mdl$Material_Ripple$Down = function (a) {
+	return {ctor: 'Down', _0: a};
+};
+var _debois$elm_mdl$Material_Ripple$downOn$ = F2(
+	function (f, name) {
+		return A2(
+			_elm_lang$html$Html_Events$on,
+			name,
+			A2(
+				_elm_lang$core$Json_Decode$map,
+				function (_p6) {
+					return f(
+						_debois$elm_mdl$Material_Ripple$Down(_p6));
+				},
+				_debois$elm_mdl$Material_Ripple$geometryDecoder));
+	});
+var _debois$elm_mdl$Material_Ripple$downOn = _debois$elm_mdl$Material_Ripple$downOn$(_elm_lang$core$Basics$identity);
+var _debois$elm_mdl$Material_Ripple$view = function (_p7) {
+	return _debois$elm_mdl$Material_Ripple$view$(
+		A3(
+			_elm_lang$core$Basics$flip,
+			_elm_lang$core$List$append,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Ripple$upOn('mouseup'),
+					_debois$elm_mdl$Material_Ripple$upOn('mouseleave'),
+					_debois$elm_mdl$Material_Ripple$upOn('touchend'),
+					_debois$elm_mdl$Material_Ripple$upOn('blur'),
+					_debois$elm_mdl$Material_Ripple$downOn('mousedown'),
+					_debois$elm_mdl$Material_Ripple$downOn('touchstart')
+				]),
+			_p7));
+};
+
+var _debois$elm_mdl$Material_Button$icon = _debois$elm_mdl$Material_Options$cs('mdl-button--icon');
+var _debois$elm_mdl$Material_Button$minifab = _debois$elm_mdl$Material_Options$cs('mdl-button--mini-fab');
+var _debois$elm_mdl$Material_Button$fab = _debois$elm_mdl$Material_Options$cs('mdl-button--fab');
+var _debois$elm_mdl$Material_Button$raised = _debois$elm_mdl$Material_Options$cs('mdl-button--raised');
+var _debois$elm_mdl$Material_Button$flat = _debois$elm_mdl$Material_Options$nop;
+var _debois$elm_mdl$Material_Button$blurAndForward = function (event) {
+	return A2(
+		_elm_lang$html$Html_Attributes$attribute,
+		A2(_elm_lang$core$Basics_ops['++'], 'on', event),
+		'this.blur(); (function(self) { var e = document.createEvent(\'Event\'); e.initEvent(\'touchcancel\', true, true); self.lastChild.dispatchEvent(e); }(this));');
+};
+var _debois$elm_mdl$Material_Button$type$ = function (tp) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{
+					type$: _elm_lang$core$Maybe$Just(tp)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Button$accent = _debois$elm_mdl$Material_Options$cs('mdl-button--accent');
+var _debois$elm_mdl$Material_Button$primary = _debois$elm_mdl$Material_Options$cs('mdl-button--primary');
+var _debois$elm_mdl$Material_Button$colored = _debois$elm_mdl$Material_Options$cs('mdl-button--colored');
+var _debois$elm_mdl$Material_Button$plain = _debois$elm_mdl$Material_Options$nop;
+var _debois$elm_mdl$Material_Button$disabled = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{disabled: true});
+	});
+var _debois$elm_mdl$Material_Button$ripple = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{ripple: true});
+	});
+var _debois$elm_mdl$Material_Button$onClick = function (x) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{
+					onClick: _elm_lang$core$Maybe$Just(
+						_elm_lang$html$Html_Events$onClick(x))
+				});
+		});
+};
+var _debois$elm_mdl$Material_Button$defaultConfig = {ripple: false, onClick: _elm_lang$core$Maybe$Nothing, disabled: false, type$: _elm_lang$core$Maybe$Nothing};
+var _debois$elm_mdl$Material_Button$view = F4(
+	function (lift, model, config, html) {
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Button$defaultConfig, config);
+		var startListeners = summary.config.ripple ? _elm_lang$core$Native_List.fromArray(
+			[
+				_elm_lang$core$Maybe$Just(
+				A2(_debois$elm_mdl$Material_Ripple$downOn$, lift, 'mousedown')),
+				_elm_lang$core$Maybe$Just(
+				A2(_debois$elm_mdl$Material_Ripple$downOn$, lift, 'touchstart'))
+			]) : _elm_lang$core$Native_List.fromArray(
+			[]);
+		var stopListeners = function () {
+			var handle = function (_p0) {
+				return _elm_lang$core$Maybe$Just(
+					(summary.config.ripple ? _debois$elm_mdl$Material_Button$blurAndForward : _debois$elm_mdl$Material_Helpers$blurOn)(_p0));
+			};
+			return _elm_lang$core$Native_List.fromArray(
+				[
+					handle('mouseup'),
+					handle('mouseleave'),
+					handle('touchend')
+				]);
+		}();
+		var misc = _elm_lang$core$Native_List.fromArray(
+			[
+				summary.config.onClick,
+				summary.config.disabled ? _elm_lang$core$Maybe$Just(
+				_elm_lang$html$Html_Attributes$disabled(true)) : _elm_lang$core$Maybe$Nothing
+			]);
+		var type$ = function () {
+			var _p1 = summary.config.type$;
+			if (_p1.ctor === 'Nothing') {
+				return _elm_lang$core$Native_List.fromArray(
+					[]);
+			} else {
+				return _elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$core$Maybe$Just(
+						_elm_lang$html$Html_Attributes$type$(_p1._0))
+					]);
+			}
+		}();
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$button,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-button'),
+					_debois$elm_mdl$Material_Options$cs('mdl-js-button'),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect'),
+					summary.config.ripple)
+				]),
+			A2(
+				_elm_lang$core$List$filterMap,
+				_elm_lang$core$Basics$identity,
+				_elm_lang$core$List$concat(
+					_elm_lang$core$Native_List.fromArray(
+						[startListeners, stopListeners, misc, type$]))),
+			summary.config.ripple ? _elm_lang$core$List$concat(
+				_elm_lang$core$Native_List.fromArray(
+					[
+						html,
+						_elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_elm_lang$html$Html_App$map,
+							lift,
+							A2(
+								_debois$elm_mdl$Material_Ripple$view$,
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$html$Html_Attributes$class('mdl-button__ripple-container'),
+										_debois$elm_mdl$Material_Ripple$upOn('blur'),
+										_debois$elm_mdl$Material_Ripple$upOn('touchcancel')
+									]),
+								model))
+						])
+					])) : html);
+	});
+var _debois$elm_mdl$Material_Button$update = function (action) {
+	return _debois$elm_mdl$Material_Ripple$update(action);
+};
+var _debois$elm_mdl$Material_Button$render = A5(
+	_debois$elm_parts$Parts$create,
+	_debois$elm_mdl$Material_Button$view,
+	_debois$elm_parts$Parts$generalize(_debois$elm_mdl$Material_Button$update),
+	function (_) {
+		return _.button;
+	},
+	F2(
+		function (x, y) {
+			return _elm_lang$core$Native_Utils.update(
+				y,
+				{button: x});
+		}),
+	_debois$elm_mdl$Material_Ripple$model);
+var _debois$elm_mdl$Material_Button$defaultModel = _debois$elm_mdl$Material_Ripple$model;
+var _debois$elm_mdl$Material_Button$Config = F4(
+	function (a, b, c, d) {
+		return {ripple: a, onClick: b, disabled: c, type$: d};
+	});
+
+var _debois$elm_mdl$Material_Textfield$update = F2(
+	function (action, model) {
+		var _p0 = action;
+		switch (_p0.ctor) {
+			case 'Input':
+				return _elm_lang$core$Native_Utils.update(
+					model,
+					{value: _p0._0});
+			case 'Blur':
+				return _elm_lang$core$Native_Utils.update(
+					model,
+					{isFocused: false});
+			default:
+				return _elm_lang$core$Native_Utils.update(
+					model,
+					{isFocused: true});
+		}
+	});
+var _debois$elm_mdl$Material_Textfield$defaultModel = {isFocused: false, value: ''};
+var _debois$elm_mdl$Material_Textfield$cols = function (cols) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					cols: _elm_lang$core$Maybe$Just(cols)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Textfield$rows = function (rows) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					rows: _elm_lang$core$Maybe$Just(rows)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Textfield$style = _debois$elm_mdl$Material_Options$inner;
+var _debois$elm_mdl$Material_Textfield$on = F2(
+	function (event, decoder) {
+		return _debois$elm_mdl$Material_Options$set(
+			function (config) {
+				return _elm_lang$core$Native_Utils.update(
+					config,
+					{
+						listeners: A2(
+							_elm_lang$core$Basics_ops['++'],
+							config.listeners,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									A2(_elm_lang$html$Html_Events$on, event, decoder)
+								]))
+					});
+			});
+	});
+var _debois$elm_mdl$Material_Textfield$onInput = function (f) {
+	return A2(
+		_debois$elm_mdl$Material_Textfield$on,
+		'input',
+		A2(_elm_lang$core$Json_Decode$map, f, _elm_lang$html$Html_Events$targetValue));
+};
+var _debois$elm_mdl$Material_Textfield$onBlur = function (f) {
+	return A2(
+		_debois$elm_mdl$Material_Textfield$on,
+		'focusout',
+		_elm_lang$core$Json_Decode$succeed(f));
+};
+var _debois$elm_mdl$Material_Textfield$onFocus = function (f) {
+	return A2(
+		_debois$elm_mdl$Material_Textfield$on,
+		'focusin',
+		_elm_lang$core$Json_Decode$succeed(f));
+};
+var _debois$elm_mdl$Material_Textfield$disabled = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{disabled: true});
+	});
+var _debois$elm_mdl$Material_Textfield$maxlength = function (v) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					maxlength: _elm_lang$core$Maybe$Just(v)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Textfield$autofocus = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{autofocus: true});
+	});
+var _debois$elm_mdl$Material_Textfield$value = function (str) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					value: _elm_lang$core$Maybe$Just(str)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Textfield$error = function (str) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					error: _elm_lang$core$Maybe$Just(str)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Textfield$floatingLabel = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{labelFloat: true});
+	});
+var _debois$elm_mdl$Material_Textfield$label = function (str) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					labelText: _elm_lang$core$Maybe$Just(str)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Textfield$Config = function (a) {
+	return function (b) {
+		return function (c) {
+			return function (d) {
+				return function (e) {
+					return function (f) {
+						return function (g) {
+							return function (h) {
+								return function (i) {
+									return function (j) {
+										return function (k) {
+											return function (l) {
+												return {labelText: a, labelFloat: b, error: c, value: d, disabled: e, kind: f, rows: g, cols: h, autofocus: i, maxlength: j, inner: k, listeners: l};
+											};
+										};
+									};
+								};
+							};
+						};
+					};
+				};
+			};
+		};
+	};
+};
+var _debois$elm_mdl$Material_Textfield$Model = F2(
+	function (a, b) {
+		return {isFocused: a, value: b};
+	});
+var _debois$elm_mdl$Material_Textfield$Password = {ctor: 'Password'};
+var _debois$elm_mdl$Material_Textfield$password = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{kind: _debois$elm_mdl$Material_Textfield$Password});
+	});
+var _debois$elm_mdl$Material_Textfield$Textarea = {ctor: 'Textarea'};
+var _debois$elm_mdl$Material_Textfield$textarea = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{kind: _debois$elm_mdl$Material_Textfield$Textarea});
+	});
+var _debois$elm_mdl$Material_Textfield$Text = {ctor: 'Text'};
+var _debois$elm_mdl$Material_Textfield$defaultConfig = {
+	labelText: _elm_lang$core$Maybe$Nothing,
+	labelFloat: false,
+	error: _elm_lang$core$Maybe$Nothing,
+	value: _elm_lang$core$Maybe$Nothing,
+	disabled: false,
+	kind: _debois$elm_mdl$Material_Textfield$Text,
+	rows: _elm_lang$core$Maybe$Nothing,
+	cols: _elm_lang$core$Maybe$Nothing,
+	autofocus: false,
+	maxlength: _elm_lang$core$Maybe$Nothing,
+	inner: _elm_lang$core$Native_List.fromArray(
+		[]),
+	listeners: _elm_lang$core$Native_List.fromArray(
+		[])
+};
+var _debois$elm_mdl$Material_Textfield$text$ = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{kind: _debois$elm_mdl$Material_Textfield$Text});
+	});
+var _debois$elm_mdl$Material_Textfield$Input = function (a) {
+	return {ctor: 'Input', _0: a};
+};
+var _debois$elm_mdl$Material_Textfield$Focus = {ctor: 'Focus'};
+var _debois$elm_mdl$Material_Textfield$Blur = {ctor: 'Blur'};
+var _debois$elm_mdl$Material_Textfield$view = F3(
+	function (lift, model, options) {
+		var _p1 = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Textfield$defaultConfig, options);
+		var summary = _p1;
+		var config = _p1.config;
+		var val = A2(_elm_lang$core$Maybe$withDefault, model.value, config.value);
+		var isTextarea = _elm_lang$core$Native_Utils.eq(config.kind, _debois$elm_mdl$Material_Textfield$Textarea);
+		var elementFunction = isTextarea ? _elm_lang$html$Html$textarea : _elm_lang$html$Html$input;
+		var typeAttributes = function () {
+			var _p2 = config.kind;
+			switch (_p2.ctor) {
+				case 'Text':
+					return _elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$type$('text')
+						]);
+				case 'Password':
+					return _elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$type$('password')
+						]);
+				default:
+					return A2(
+						_elm_lang$core$Basics_ops['++'],
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							function () {
+								var _p3 = config.rows;
+								if (_p3.ctor === 'Just') {
+									return _elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$html$Html_Attributes$rows(_p3._0)
+										]);
+								} else {
+									return _elm_lang$core$Native_List.fromArray(
+										[]);
+								}
+							}(),
+							function () {
+								var _p4 = config.cols;
+								if (_p4.ctor === 'Just') {
+									return _elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$html$Html_Attributes$cols(_p4._0)
+										]);
+								} else {
+									return _elm_lang$core$Native_List.fromArray(
+										[]);
+								}
+							}()));
+			}
+		}();
+		var maxlength = function () {
+			var _p5 = config.maxlength;
+			if (_p5.ctor === 'Just') {
+				return _elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$html$Html_Attributes$maxlength(_p5._0)
+					]);
+			} else {
+				return _elm_lang$core$Native_List.fromArray(
+					[]);
+			}
+		}();
+		var listeners = config.listeners;
+		var textValue = function () {
+			var _p6 = config.value;
+			if (_p6.ctor === 'Just') {
+				return _elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$html$Html_Attributes$value(_p6._0)
+					]);
+			} else {
+				return _elm_lang$core$Native_List.fromArray(
+					[]);
+			}
+		}();
+		var defaultInput = function () {
+			var _p7 = config.value;
+			if (_p7.ctor === 'Just') {
+				return _elm_lang$core$Maybe$Nothing;
+			} else {
+				return _elm_lang$core$Maybe$Just(
+					A2(
+						_elm_lang$html$Html_Events$on,
+						'input',
+						A2(
+							_elm_lang$core$Json_Decode$map,
+							function (_p8) {
+								return lift(
+									_debois$elm_mdl$Material_Textfield$Input(_p8));
+							},
+							_elm_lang$html$Html_Events$targetValue)));
+			}
+		}();
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-textfield'),
+					_debois$elm_mdl$Material_Options$cs('mdl-js-textfield'),
+					_debois$elm_mdl$Material_Options$cs('is-upgraded'),
+					config.labelFloat ? _debois$elm_mdl$Material_Options$cs('mdl-textfield--floating-label') : _debois$elm_mdl$Material_Options$nop,
+					(!_elm_lang$core$Native_Utils.eq(config.error, _elm_lang$core$Maybe$Nothing)) ? _debois$elm_mdl$Material_Options$cs('is-invalid') : _debois$elm_mdl$Material_Options$nop,
+					(!_elm_lang$core$Native_Utils.eq(val, '')) ? _debois$elm_mdl$Material_Options$cs('is-dirty') : _debois$elm_mdl$Material_Options$nop,
+					(model.isFocused && _elm_lang$core$Basics$not(config.disabled)) ? _debois$elm_mdl$Material_Options$cs('is-focused') : _debois$elm_mdl$Material_Options$nop,
+					config.disabled ? _debois$elm_mdl$Material_Options$cs('is-disabled') : _debois$elm_mdl$Material_Options$nop
+				]),
+			A2(
+				_elm_lang$core$List$filterMap,
+				_elm_lang$core$Basics$identity,
+				_elm_lang$core$Native_List.fromArray(
+					[defaultInput])),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A4(
+					_debois$elm_mdl$Material_Options$styled$,
+					elementFunction,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-textfield__input'),
+							A2(_debois$elm_mdl$Material_Options$css, 'outline', 'none'),
+							_debois$elm_mdl$Material_Options_Internal$attribute(
+							A2(
+								_elm_lang$html$Html_Events$on,
+								'focus',
+								_elm_lang$core$Json_Decode$succeed(
+									lift(_debois$elm_mdl$Material_Textfield$Focus)))),
+							_debois$elm_mdl$Material_Options_Internal$attribute(
+							A2(
+								_elm_lang$html$Html_Events$on,
+								'blur',
+								_elm_lang$core$Json_Decode$succeed(
+									lift(_debois$elm_mdl$Material_Textfield$Blur)))),
+							_debois$elm_mdl$Material_Options$many(config.inner)
+						]),
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$html$Html_Attributes$disabled(config.disabled),
+								_elm_lang$html$Html_Attributes$autofocus(config.autofocus)
+							]),
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							textValue,
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								typeAttributes,
+								A2(_elm_lang$core$Basics_ops['++'], maxlength, listeners)))),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$label,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-textfield__label')
+						]),
+					function () {
+						var _p9 = config.labelText;
+						if (_p9.ctor === 'Just') {
+							return _elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$html$Html$text(_p9._0)
+								]);
+						} else {
+							return _elm_lang$core$Native_List.fromArray(
+								[]);
+						}
+					}()),
+					A2(
+					_elm_lang$core$Maybe$withDefault,
+					A2(
+						_elm_lang$html$Html$div,
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+					A2(
+						_elm_lang$core$Maybe$map,
+						function (e) {
+							return A2(
+								_elm_lang$html$Html$span,
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$html$Html_Attributes$class('mdl-textfield__error')
+									]),
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$html$Html$text(e)
+									]));
+						},
+						config.error))
+				]));
+	});
+var _debois$elm_mdl$Material_Textfield$render = A5(
+	_debois$elm_parts$Parts$create,
+	_debois$elm_mdl$Material_Textfield$view,
+	F3(
+		function (_p10, msg, model) {
+			return _elm_lang$core$Maybe$Just(
+				{
+					ctor: '_Tuple2',
+					_0: A2(_debois$elm_mdl$Material_Textfield$update, msg, model),
+					_1: _elm_lang$core$Platform_Cmd$none
+				});
+		}),
+	function (_) {
+		return _.textfield;
+	},
+	F2(
+		function (x, c) {
+			return _elm_lang$core$Native_Utils.update(
+				c,
+				{textfield: x});
+		}),
+	_debois$elm_mdl$Material_Textfield$defaultModel);
+
+var _elm_lang$dom$Native_Dom = function() {
+
+function on(node)
+{
+	return function(eventName, decoder, toTask)
+	{
+		return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback) {
+
+			function performTask(event)
+			{
+				var result = A2(_elm_lang$core$Json_Decode$decodeValue, decoder, event);
+				if (result.ctor === 'Ok')
+				{
+					_elm_lang$core$Native_Scheduler.rawSpawn(toTask(result._0));
+				}
+			}
+
+			node.addEventListener(eventName, performTask);
+
+			return function()
+			{
+				node.removeEventListener(eventName, performTask);
+			};
+		});
+	};
+}
+
+var rAF = typeof requestAnimationFrame !== 'undefined'
+	? requestAnimationFrame
+	: function(callback) { callback(); };
+
+function withNode(id, doStuff)
+{
+	return _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
+	{
+		rAF(function()
+		{
+			var node = document.getElementById(id);
+			if (node === null)
+			{
+				callback(_elm_lang$core$Native_Scheduler.fail({ ctor: 'NotFound', _0: id }));
+				return;
+			}
+			callback(_elm_lang$core$Native_Scheduler.succeed(doStuff(node)));
+		});
+	});
+}
+
+
+// FOCUS
+
+function focus(id)
+{
+	return withNode(id, function(node) {
+		node.focus();
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function blur(id)
+{
+	return withNode(id, function(node) {
+		node.blur();
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+
+// SCROLLING
+
+function getScrollTop(id)
+{
+	return withNode(id, function(node) {
+		return node.scrollTop;
+	});
+}
+
+function setScrollTop(id, desiredScrollTop)
+{
+	return withNode(id, function(node) {
+		node.scrollTop = desiredScrollTop;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function toBottom(id)
+{
+	return withNode(id, function(node) {
+		node.scrollTop = node.scrollHeight;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function getScrollLeft(id)
+{
+	return withNode(id, function(node) {
+		return node.scrollLeft;
+	});
+}
+
+function setScrollLeft(id, desiredScrollLeft)
+{
+	return withNode(id, function(node) {
+		node.scrollLeft = desiredScrollLeft;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+function toRight(id)
+{
+	return withNode(id, function(node) {
+		node.scrollLeft = node.scrollWidth;
+		return _elm_lang$core$Native_Utils.Tuple0;
+	});
+}
+
+
+// SIZE
+
+function width(options, id)
+{
+	return withNode(id, function(node) {
+		switch (options.ctor)
+		{
+			case 'Content':
+				return node.scrollWidth;
+			case 'VisibleContent':
+				return node.clientWidth;
+			case 'VisibleContentWithBorders':
+				return node.offsetWidth;
+			case 'VisibleContentWithBordersAndMargins':
+				var rect = node.getBoundingClientRect();
+				return rect.right - rect.left;
+		}
+	});
+}
+
+function height(options, id)
+{
+	return withNode(id, function(node) {
+		switch (options.ctor)
+		{
+			case 'Content':
+				return node.scrollHeight;
+			case 'VisibleContent':
+				return node.clientHeight;
+			case 'VisibleContentWithBorders':
+				return node.offsetHeight;
+			case 'VisibleContentWithBordersAndMargins':
+				var rect = node.getBoundingClientRect();
+				return rect.bottom - rect.top;
+		}
+	});
+}
+
+return {
+	onDocument: F3(on(document)),
+	onWindow: F3(on(window)),
+
+	focus: focus,
+	blur: blur,
+
+	getScrollTop: getScrollTop,
+	setScrollTop: F2(setScrollTop),
+	getScrollLeft: getScrollLeft,
+	setScrollLeft: F2(setScrollLeft),
+	toBottom: toBottom,
+	toRight: toRight,
+
+	height: F2(height),
+	width: F2(width)
+};
+
+}();
+
+var _elm_lang$dom$Dom_LowLevel$onWindow = _elm_lang$dom$Native_Dom.onWindow;
+var _elm_lang$dom$Dom_LowLevel$onDocument = _elm_lang$dom$Native_Dom.onDocument;
+
+var _elm_lang$mouse$Mouse$onSelfMsg = F3(
+	function (router, _p0, state) {
+		var _p1 = _p0;
+		var _p2 = A2(_elm_lang$core$Dict$get, _p1.category, state);
+		if (_p2.ctor === 'Nothing') {
+			return _elm_lang$core$Task$succeed(state);
+		} else {
+			var send = function (tagger) {
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					tagger(_p1.position));
+			};
+			return A2(
+				_elm_lang$core$Task$andThen,
+				_elm_lang$core$Task$sequence(
+					A2(_elm_lang$core$List$map, send, _p2._0.taggers)),
+				function (_p3) {
+					return _elm_lang$core$Task$succeed(state);
+				});
+		}
+	});
+var _elm_lang$mouse$Mouse_ops = _elm_lang$mouse$Mouse_ops || {};
+_elm_lang$mouse$Mouse_ops['&>'] = F2(
+	function (t1, t2) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			t1,
+			function (_p4) {
+				return t2;
+			});
+	});
+var _elm_lang$mouse$Mouse$init = _elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty);
+var _elm_lang$mouse$Mouse$categorizeHelpHelp = F2(
+	function (value, maybeValues) {
+		var _p5 = maybeValues;
+		if (_p5.ctor === 'Nothing') {
+			return _elm_lang$core$Maybe$Just(
+				_elm_lang$core$Native_List.fromArray(
+					[value]));
+		} else {
+			return _elm_lang$core$Maybe$Just(
+				A2(_elm_lang$core$List_ops['::'], value, _p5._0));
+		}
+	});
+var _elm_lang$mouse$Mouse$categorizeHelp = F2(
+	function (subs, subDict) {
+		categorizeHelp:
+		while (true) {
+			var _p6 = subs;
+			if (_p6.ctor === '[]') {
+				return subDict;
+			} else {
+				var _v4 = _p6._1,
+					_v5 = A3(
+					_elm_lang$core$Dict$update,
+					_p6._0._0,
+					_elm_lang$mouse$Mouse$categorizeHelpHelp(_p6._0._1),
+					subDict);
+				subs = _v4;
+				subDict = _v5;
+				continue categorizeHelp;
+			}
+		}
+	});
+var _elm_lang$mouse$Mouse$categorize = function (subs) {
+	return A2(_elm_lang$mouse$Mouse$categorizeHelp, subs, _elm_lang$core$Dict$empty);
+};
+var _elm_lang$mouse$Mouse$subscription = _elm_lang$core$Native_Platform.leaf('Mouse');
+var _elm_lang$mouse$Mouse$Position = F2(
+	function (a, b) {
+		return {x: a, y: b};
+	});
+var _elm_lang$mouse$Mouse$position = A3(
+	_elm_lang$core$Json_Decode$object2,
+	_elm_lang$mouse$Mouse$Position,
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'pageX', _elm_lang$core$Json_Decode$int),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'pageY', _elm_lang$core$Json_Decode$int));
+var _elm_lang$mouse$Mouse$Watcher = F2(
+	function (a, b) {
+		return {taggers: a, pid: b};
+	});
+var _elm_lang$mouse$Mouse$Msg = F2(
+	function (a, b) {
+		return {category: a, position: b};
+	});
+var _elm_lang$mouse$Mouse$onEffects = F3(
+	function (router, newSubs, oldState) {
+		var rightStep = F3(
+			function (category, taggers, task) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					task,
+					function (state) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							_elm_lang$core$Process$spawn(
+								A3(
+									_elm_lang$dom$Dom_LowLevel$onDocument,
+									category,
+									_elm_lang$mouse$Mouse$position,
+									function (_p7) {
+										return A2(
+											_elm_lang$core$Platform$sendToSelf,
+											router,
+											A2(_elm_lang$mouse$Mouse$Msg, category, _p7));
+									})),
+							function (pid) {
+								return _elm_lang$core$Task$succeed(
+									A3(
+										_elm_lang$core$Dict$insert,
+										category,
+										A2(_elm_lang$mouse$Mouse$Watcher, taggers, pid),
+										state));
+							});
+					});
+			});
+		var bothStep = F4(
+			function (category, _p8, taggers, task) {
+				var _p9 = _p8;
+				return A2(
+					_elm_lang$core$Task$andThen,
+					task,
+					function (state) {
+						return _elm_lang$core$Task$succeed(
+							A3(
+								_elm_lang$core$Dict$insert,
+								category,
+								A2(_elm_lang$mouse$Mouse$Watcher, taggers, _p9.pid),
+								state));
+					});
+			});
+		var leftStep = F3(
+			function (category, _p10, task) {
+				var _p11 = _p10;
+				return A2(
+					_elm_lang$mouse$Mouse_ops['&>'],
+					_elm_lang$core$Process$kill(_p11.pid),
+					task);
+			});
+		return A6(
+			_elm_lang$core$Dict$merge,
+			leftStep,
+			bothStep,
+			rightStep,
+			oldState,
+			_elm_lang$mouse$Mouse$categorize(newSubs),
+			_elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty));
+	});
+var _elm_lang$mouse$Mouse$MySub = F2(
+	function (a, b) {
+		return {ctor: 'MySub', _0: a, _1: b};
+	});
+var _elm_lang$mouse$Mouse$clicks = function (tagger) {
+	return _elm_lang$mouse$Mouse$subscription(
+		A2(_elm_lang$mouse$Mouse$MySub, 'click', tagger));
+};
+var _elm_lang$mouse$Mouse$moves = function (tagger) {
+	return _elm_lang$mouse$Mouse$subscription(
+		A2(_elm_lang$mouse$Mouse$MySub, 'mousemove', tagger));
+};
+var _elm_lang$mouse$Mouse$downs = function (tagger) {
+	return _elm_lang$mouse$Mouse$subscription(
+		A2(_elm_lang$mouse$Mouse$MySub, 'mousedown', tagger));
+};
+var _elm_lang$mouse$Mouse$ups = function (tagger) {
+	return _elm_lang$mouse$Mouse$subscription(
+		A2(_elm_lang$mouse$Mouse$MySub, 'mouseup', tagger));
+};
+var _elm_lang$mouse$Mouse$subMap = F2(
+	function (func, _p12) {
+		var _p13 = _p12;
+		return A2(
+			_elm_lang$mouse$Mouse$MySub,
+			_p13._0,
+			function (_p14) {
+				return func(
+					_p13._1(_p14));
+			});
+	});
+_elm_lang$core$Native_Platform.effectManagers['Mouse'] = {pkg: 'elm-lang/mouse', init: _elm_lang$mouse$Mouse$init, onEffects: _elm_lang$mouse$Mouse$onEffects, onSelfMsg: _elm_lang$mouse$Mouse$onSelfMsg, tag: 'sub', subMap: _elm_lang$mouse$Mouse$subMap};
+
+var _debois$elm_mdl$Material_Icon$size48 = A2(_debois$elm_mdl$Material_Options$css, 'font-size', '48px');
+var _debois$elm_mdl$Material_Icon$size36 = A2(_debois$elm_mdl$Material_Options$css, 'font-size', '36px');
+var _debois$elm_mdl$Material_Icon$size24 = A2(_debois$elm_mdl$Material_Options$css, 'font-size', '24px');
+var _debois$elm_mdl$Material_Icon$size18 = A2(_debois$elm_mdl$Material_Options$css, 'font-size', '18px');
+var _debois$elm_mdl$Material_Icon$onClick = function (x) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					onClick: _elm_lang$core$Maybe$Just(
+						_elm_lang$html$Html_Events$onClick(x))
+				});
+		});
+};
+var _debois$elm_mdl$Material_Icon$defaultConfig = {onClick: _elm_lang$core$Maybe$Nothing};
+var _debois$elm_mdl$Material_Icon$view = F2(
+	function (name, options) {
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Icon$defaultConfig, options);
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$i,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('material-icons')
+				]),
+			A2(
+				_elm_lang$core$Maybe$withDefault,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				A2(
+					_elm_lang$core$Maybe$map,
+					A2(
+						_elm_lang$core$Basics$flip,
+						F2(
+							function (x, y) {
+								return A2(_elm_lang$core$List_ops['::'], x, y);
+							}),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+					summary.config.onClick)),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(name)
+				]));
+	});
+var _debois$elm_mdl$Material_Icon$i = function (name) {
+	return A2(
+		_debois$elm_mdl$Material_Icon$view,
+		name,
+		_elm_lang$core$Native_List.fromArray(
+			[]));
+};
+var _debois$elm_mdl$Material_Icon$Config = function (a) {
+	return {onClick: a};
+};
+
+var _debois$elm_mdl$Material_Menu_Geometry$Geometry = F5(
+	function (a, b, c, d, e) {
+		return {button: a, menu: b, container: c, offsetTops: d, offsetHeights: e};
+	});
+var _debois$elm_mdl$Material_Menu_Geometry$Element = F4(
+	function (a, b, c, d) {
+		return {offsetTop: a, offsetLeft: b, offsetHeight: c, bounds: d};
+	});
+var _debois$elm_mdl$Material_Menu_Geometry$element = A5(_elm_lang$core$Json_Decode$object4, _debois$elm_mdl$Material_Menu_Geometry$Element, _debois$elm_dom$DOM$offsetTop, _debois$elm_dom$DOM$offsetLeft, _debois$elm_dom$DOM$offsetHeight, _debois$elm_dom$DOM$boundingClientRect);
+var _debois$elm_mdl$Material_Menu_Geometry$decode = A6(
+	_elm_lang$core$Json_Decode$object5,
+	_debois$elm_mdl$Material_Menu_Geometry$Geometry,
+	_debois$elm_dom$DOM$target(_debois$elm_mdl$Material_Menu_Geometry$element),
+	_debois$elm_dom$DOM$target(
+		_debois$elm_dom$DOM$nextSibling(
+			A2(_debois$elm_dom$DOM$childNode, 1, _debois$elm_mdl$Material_Menu_Geometry$element))),
+	_debois$elm_dom$DOM$target(
+		_debois$elm_dom$DOM$nextSibling(_debois$elm_mdl$Material_Menu_Geometry$element)),
+	_debois$elm_dom$DOM$target(
+		_debois$elm_dom$DOM$nextSibling(
+			A2(
+				_debois$elm_dom$DOM$childNode,
+				1,
+				_debois$elm_dom$DOM$childNodes(_debois$elm_dom$DOM$offsetTop)))),
+	_debois$elm_dom$DOM$target(
+		_debois$elm_dom$DOM$nextSibling(
+			A2(
+				_debois$elm_dom$DOM$childNode,
+				1,
+				_debois$elm_dom$DOM$childNodes(_debois$elm_dom$DOM$offsetHeight)))));
+
+var _debois$elm_mdl$Material_Menu$toPx = function (_p0) {
+	return A3(
+		_elm_lang$core$Basics$flip,
+		F2(
+			function (x, y) {
+				return A2(_elm_lang$core$Basics_ops['++'], x, y);
+			}),
+		'px',
+		_elm_lang$core$Basics$toString(_p0));
+};
+var _debois$elm_mdl$Material_Menu$rect = F4(
+	function (x, y, w, h) {
+		return function (coords) {
+			return A2(
+				_elm_lang$core$Basics_ops['++'],
+				'rect(',
+				A2(_elm_lang$core$Basics_ops['++'], coords, ')'));
+		}(
+			A2(
+				_elm_lang$core$String$join,
+				' ',
+				A2(
+					_elm_lang$core$List$map,
+					_debois$elm_mdl$Material_Menu$toPx,
+					_elm_lang$core$Native_List.fromArray(
+						[x, y, w, h]))));
+	});
+var _debois$elm_mdl$Material_Menu$onKeyDown = function (action) {
+	return A3(
+		_elm_lang$html$Html_Events$onWithOptions,
+		'keydown',
+		{preventDefault: true, stopPropagation: false},
+		A2(_elm_lang$core$Json_Decode$map, action, _elm_lang$html$Html_Events$keyCode));
+};
+var _debois$elm_mdl$Material_Menu$onClick = F2(
+	function (decoder, action) {
+		return A2(
+			_elm_lang$html$Html_Events$on,
+			'click',
+			A2(_elm_lang$core$Json_Decode$map, action, decoder));
+	});
+var _debois$elm_mdl$Material_Menu$withGeometry = F2(
+	function (model, f) {
+		return A2(
+			_elm_lang$core$Maybe$withDefault,
+			_debois$elm_mdl$Material_Options$nop,
+			A2(_elm_lang$core$Maybe$map, f, model.geometry));
+	});
+var _debois$elm_mdl$Material_Menu$icon = function (name) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{icon: name});
+		});
+};
+var _debois$elm_mdl$Material_Menu$ripple = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{ripple: true});
+	});
+var _debois$elm_mdl$Material_Menu$onSelect = function (msg) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					onSelect: _elm_lang$core$Maybe$Just(msg)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Menu$disabled = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{enabled: false});
+	});
+var _debois$elm_mdl$Material_Menu$divider = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{divider: true});
+	});
+var _debois$elm_mdl$Material_Menu$defaultItemConfig = {enabled: true, divider: false, onSelect: _elm_lang$core$Maybe$Nothing};
+var _debois$elm_mdl$Material_Menu$constant = {transitionDurationSeconds: 0.3, transitionDurationFraction: 0.8, closeTimeout: 150};
+var _debois$elm_mdl$Material_Menu$transitionDuration = _debois$elm_mdl$Material_Menu$constant.transitionDurationSeconds * _debois$elm_mdl$Material_Menu$constant.transitionDurationFraction;
+var _debois$elm_mdl$Material_Menu$Model = F4(
+	function (a, b, c, d) {
+		return {ripples: a, animationState: b, geometry: c, index: d};
+	});
+var _debois$elm_mdl$Material_Menu$Item = F2(
+	function (a, b) {
+		return {options: a, html: b};
+	});
+var _debois$elm_mdl$Material_Menu$item = _debois$elm_mdl$Material_Menu$Item;
+var _debois$elm_mdl$Material_Menu$ItemConfig = F3(
+	function (a, b, c) {
+		return {enabled: a, divider: b, onSelect: c};
+	});
+var _debois$elm_mdl$Material_Menu$Config = F3(
+	function (a, b, c) {
+		return {alignment: a, ripple: b, icon: c};
+	});
+var _debois$elm_mdl$Material_Menu$Closing = {ctor: 'Closing'};
+var _debois$elm_mdl$Material_Menu$Opened = {ctor: 'Opened'};
+var _debois$elm_mdl$Material_Menu$clip = F3(
+	function (model, config, geometry) {
+		var height = geometry.menu.bounds.height;
+		var width = geometry.menu.bounds.width;
+		return A2(
+			_debois$elm_mdl$Material_Options$css,
+			'clip',
+			function () {
+				if (_elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opened) || _elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Closing)) {
+					return A4(_debois$elm_mdl$Material_Menu$rect, 0, width, height, 0);
+				} else {
+					var _p1 = config.alignment;
+					switch (_p1.ctor) {
+						case 'BottomRight':
+							return A4(_debois$elm_mdl$Material_Menu$rect, 0, width, 0, width);
+						case 'TopLeft':
+							return A4(_debois$elm_mdl$Material_Menu$rect, height, 0, height, 0);
+						case 'TopRight':
+							return A4(_debois$elm_mdl$Material_Menu$rect, height, width, height, width);
+						default:
+							return '';
+					}
+				}
+			}());
+	});
+var _debois$elm_mdl$Material_Menu$Opening = {ctor: 'Opening'};
+var _debois$elm_mdl$Material_Menu$isActive = function (model) {
+	return _elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opened) || _elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opening);
+};
+var _debois$elm_mdl$Material_Menu$Idle = {ctor: 'Idle'};
+var _debois$elm_mdl$Material_Menu$defaultModel = {ripples: _elm_lang$core$Dict$empty, animationState: _debois$elm_mdl$Material_Menu$Idle, geometry: _elm_lang$core$Maybe$Nothing, index: _elm_lang$core$Maybe$Nothing};
+var _debois$elm_mdl$Material_Menu$Key = F2(
+	function (a, b) {
+		return {ctor: 'Key', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Menu$Click = function (a) {
+	return {ctor: 'Click', _0: a};
+};
+var _debois$elm_mdl$Material_Menu$subscriptions = function (model) {
+	return _elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opened) ? _elm_lang$mouse$Mouse$clicks(_debois$elm_mdl$Material_Menu$Click) : _elm_lang$core$Platform_Sub$none;
+};
+var _debois$elm_mdl$Material_Menu$Ripple = F2(
+	function (a, b) {
+		return {ctor: 'Ripple', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Menu$Tick = {ctor: 'Tick'};
+var _debois$elm_mdl$Material_Menu$Close = {ctor: 'Close'};
+var _debois$elm_mdl$Material_Menu$Select = F2(
+	function (a, b) {
+		return {ctor: 'Select', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Menu$update = F3(
+	function (fwd, msg, model) {
+		update:
+		while (true) {
+			var _p2 = msg;
+			switch (_p2.ctor) {
+				case 'Open':
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{
+								animationState: function () {
+									var _p3 = model.animationState;
+									if (_p3.ctor === 'Opened') {
+										return _debois$elm_mdl$Material_Menu$Opened;
+									} else {
+										return _debois$elm_mdl$Material_Menu$Opening;
+									}
+								}(),
+								geometry: _elm_lang$core$Maybe$Just(_p2._0)
+							}),
+						_1: _debois$elm_mdl$Material_Helpers$cmd(
+							fwd(_debois$elm_mdl$Material_Menu$Tick))
+					};
+				case 'Tick':
+					return _debois$elm_mdl$Material_Helpers$pure(
+						_elm_lang$core$Native_Utils.update(
+							model,
+							{animationState: _debois$elm_mdl$Material_Menu$Opened}));
+				case 'Close':
+					return _debois$elm_mdl$Material_Helpers$pure(
+						_elm_lang$core$Native_Utils.update(
+							model,
+							{animationState: _debois$elm_mdl$Material_Menu$Idle, geometry: _elm_lang$core$Maybe$Nothing, index: _elm_lang$core$Maybe$Nothing}));
+				case 'Select':
+					var cmds = A2(
+						_elm_lang$core$List$filterMap,
+						_elm_lang$core$Basics$identity,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$core$Maybe$Just(
+								A2(
+									_debois$elm_mdl$Material_Helpers$delay,
+									_debois$elm_mdl$Material_Menu$constant.closeTimeout,
+									fwd(_debois$elm_mdl$Material_Menu$Close))),
+								A2(_elm_lang$core$Maybe$map, _debois$elm_mdl$Material_Helpers$cmd, _p2._1)
+							]));
+					var model$ = _elm_lang$core$Native_Utils.update(
+						model,
+						{animationState: _debois$elm_mdl$Material_Menu$Closing});
+					return {
+						ctor: '_Tuple2',
+						_0: model$,
+						_1: _elm_lang$core$Platform_Cmd$batch(cmds)
+					};
+				case 'Ripple':
+					var _p6 = _p2._0;
+					var _p4 = A2(
+						_debois$elm_mdl$Material_Ripple$update,
+						_p2._1,
+						A2(
+							_elm_lang$core$Maybe$withDefault,
+							_debois$elm_mdl$Material_Ripple$model,
+							A2(_elm_lang$core$Dict$get, _p6, model.ripples)));
+					var model$ = _p4._0;
+					var effects = _p4._1;
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Native_Utils.update(
+							model,
+							{
+								ripples: A3(_elm_lang$core$Dict$insert, _p6, model$, model.ripples)
+							}),
+						_1: A2(
+							_elm_lang$core$Platform_Cmd$map,
+							function (_p5) {
+								return fwd(
+									A2(_debois$elm_mdl$Material_Menu$Ripple, _p6, _p5));
+							},
+							effects)
+					};
+				case 'Click':
+					if (_debois$elm_mdl$Material_Menu$isActive(model)) {
+						var _p7 = model.geometry;
+						if (_p7.ctor === 'Just') {
+							var inside = F2(
+								function (_p9, _p8) {
+									var _p10 = _p9;
+									var _p15 = _p10.y;
+									var _p14 = _p10.x;
+									var _p11 = _p8;
+									var _p13 = _p11.top;
+									var _p12 = _p11.left;
+									return (_elm_lang$core$Native_Utils.cmp(
+										_p12,
+										_elm_lang$core$Basics$toFloat(_p14)) < 1) && ((_elm_lang$core$Native_Utils.cmp(
+										_elm_lang$core$Basics$toFloat(_p14),
+										_p12 + _p11.width) < 1) && ((_elm_lang$core$Native_Utils.cmp(
+										_p13,
+										_elm_lang$core$Basics$toFloat(_p15)) < 1) && (_elm_lang$core$Native_Utils.cmp(
+										_elm_lang$core$Basics$toFloat(_p15),
+										_p13 + _p11.height) < 1)));
+								});
+							if (A2(inside, _p2._0, _p7._0.menu.bounds)) {
+								return A2(
+									_elm_lang$core$Platform_Cmd_ops['!'],
+									model,
+									_elm_lang$core$Native_List.fromArray(
+										[]));
+							} else {
+								var _v6 = fwd,
+									_v7 = _debois$elm_mdl$Material_Menu$Close,
+									_v8 = model;
+								fwd = _v6;
+								msg = _v7;
+								model = _v8;
+								continue update;
+							}
+						} else {
+							return A2(
+								_elm_lang$core$Platform_Cmd_ops['!'],
+								model,
+								_elm_lang$core$Native_List.fromArray(
+									[]));
+						}
+					} else {
+						return A2(
+							_elm_lang$core$Platform_Cmd_ops['!'],
+							model,
+							_elm_lang$core$Native_List.fromArray(
+								[]));
+					}
+				default:
+					var _p24 = _p2._0;
+					var _p16 = _p2._1;
+					switch (_p16) {
+						case 13:
+							if (_debois$elm_mdl$Material_Menu$isActive(model)) {
+								var _p17 = model.index;
+								if (_p17.ctor === 'Just') {
+									var _p19 = _p17._0;
+									var cmd = A3(
+										_elm_lang$core$Basics$flip,
+										_elm_lang$core$Maybe$andThen,
+										function (_p18) {
+											return function (_) {
+												return _.onSelect;
+											}(
+												function (_) {
+													return _.config;
+												}(_p18));
+										},
+										_elm_lang$core$List$head(
+											A2(_elm_lang$core$List$drop, _p19, _p24)));
+									var _v11 = fwd,
+										_v12 = A2(_debois$elm_mdl$Material_Menu$Select, _p19 + 1, cmd),
+										_v13 = model;
+									fwd = _v11;
+									msg = _v12;
+									model = _v13;
+									continue update;
+								} else {
+									var _v14 = fwd,
+										_v15 = _debois$elm_mdl$Material_Menu$Close,
+										_v16 = model;
+									fwd = _v14;
+									msg = _v15;
+									model = _v16;
+									continue update;
+								}
+							} else {
+								return A2(
+									_elm_lang$core$Platform_Cmd_ops['!'],
+									model,
+									_elm_lang$core$Native_List.fromArray(
+										[]));
+							}
+						case 27:
+							var _v17 = fwd,
+								_v18 = _debois$elm_mdl$Material_Menu$Close,
+								_v19 = model;
+							fwd = _v17;
+							msg = _v18;
+							model = _v19;
+							continue update;
+						case 32:
+							if (_debois$elm_mdl$Material_Menu$isActive(model)) {
+								var _v20 = fwd,
+									_v21 = A2(_debois$elm_mdl$Material_Menu$Key, _p24, 13),
+									_v22 = model;
+								fwd = _v20;
+								msg = _v21;
+								model = _v22;
+								continue update;
+							} else {
+								return A2(
+									_elm_lang$core$Platform_Cmd_ops['!'],
+									model,
+									_elm_lang$core$Native_List.fromArray(
+										[]));
+							}
+						case 40:
+							if (_debois$elm_mdl$Material_Menu$isActive(model)) {
+								var items = A2(
+									_elm_lang$core$List$indexedMap,
+									F2(
+										function (v0, v1) {
+											return {ctor: '_Tuple2', _0: v0, _1: v1};
+										}),
+									_p24);
+								return A3(
+									_elm_lang$core$Basics$flip,
+									F2(
+										function (x, y) {
+											return A2(_elm_lang$core$Platform_Cmd_ops['!'], x, y);
+										}),
+									_elm_lang$core$Native_List.fromArray(
+										[]),
+									A2(
+										_elm_lang$core$Maybe$withDefault,
+										model,
+										A2(
+											_elm_lang$core$Maybe$map,
+											function (_p20) {
+												return function (index$) {
+													return _elm_lang$core$Native_Utils.update(
+														model,
+														{
+															index: _elm_lang$core$Maybe$Just(index$)
+														});
+												}(
+													_elm_lang$core$Basics$fst(_p20));
+											},
+											_elm_lang$core$List$head(
+												A2(
+													_elm_lang$core$List$filter,
+													function (_p21) {
+														return function (_) {
+															return _.enabled;
+														}(
+															function (_) {
+																return _.config;
+															}(
+																_elm_lang$core$Basics$snd(_p21)));
+													},
+													A2(
+														_elm_lang$core$List$drop,
+														1 + A2(_elm_lang$core$Maybe$withDefault, -1, model.index),
+														A2(_elm_lang$core$Basics_ops['++'], items, items)))))));
+							} else {
+								return A2(
+									_elm_lang$core$Platform_Cmd_ops['!'],
+									model,
+									_elm_lang$core$Native_List.fromArray(
+										[]));
+							}
+						case 38:
+							if (_debois$elm_mdl$Material_Menu$isActive(model)) {
+								var items = A2(
+									_elm_lang$core$List$indexedMap,
+									F2(
+										function (v0, v1) {
+											return {ctor: '_Tuple2', _0: v0, _1: v1};
+										}),
+									_p24);
+								return _debois$elm_mdl$Material_Helpers$pure(
+									A2(
+										_elm_lang$core$Maybe$withDefault,
+										model,
+										A2(
+											_elm_lang$core$Maybe$map,
+											function (_p22) {
+												return function (index$) {
+													return _elm_lang$core$Native_Utils.update(
+														model,
+														{
+															index: _elm_lang$core$Maybe$Just(index$)
+														});
+												}(
+													_elm_lang$core$Basics$fst(_p22));
+											},
+											_elm_lang$core$List$head(
+												A2(
+													_elm_lang$core$List$filter,
+													function (_p23) {
+														return function (_) {
+															return _.enabled;
+														}(
+															function (_) {
+																return _.config;
+															}(
+																_elm_lang$core$Basics$snd(_p23)));
+													},
+													A2(
+														_elm_lang$core$List$drop,
+														_elm_lang$core$List$length(_p24) - A2(_elm_lang$core$Maybe$withDefault, 0, model.index),
+														_elm_lang$core$List$reverse(
+															A2(_elm_lang$core$Basics_ops['++'], items, items))))))));
+							} else {
+								return A2(
+									_elm_lang$core$Platform_Cmd_ops['!'],
+									model,
+									_elm_lang$core$Native_List.fromArray(
+										[]));
+							}
+						default:
+							return A2(
+								_elm_lang$core$Platform_Cmd_ops['!'],
+								model,
+								_elm_lang$core$Native_List.fromArray(
+									[]));
+					}
+			}
+		}
+	});
+var _debois$elm_mdl$Material_Menu$update$ = F3(
+	function (fwd, msg, model) {
+		return _elm_lang$core$Maybe$Just(
+			A3(_debois$elm_mdl$Material_Menu$update, fwd, msg, model));
+	});
+var _debois$elm_mdl$Material_Menu$pack = A4(
+	_debois$elm_parts$Parts$pack,
+	_debois$elm_mdl$Material_Menu$update$,
+	function (_) {
+		return _.menu;
+	},
+	F2(
+		function (x, y) {
+			return _elm_lang$core$Native_Utils.update(
+				y,
+				{menu: x});
+		}),
+	_debois$elm_mdl$Material_Menu$defaultModel);
+var _debois$elm_mdl$Material_Menu$subs = function (lift) {
+	return function (_p25) {
+		return _elm_lang$core$Platform_Sub$batch(
+			A3(
+				_elm_lang$core$Dict$foldl,
+				F3(
+					function (idx, model, ss) {
+						return A2(
+							_elm_lang$core$List_ops['::'],
+							A2(
+								_elm_lang$core$Platform_Sub$map,
+								A2(_debois$elm_mdl$Material_Menu$pack, lift, idx),
+								_debois$elm_mdl$Material_Menu$subscriptions(model)),
+							ss);
+					}),
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				function (_) {
+					return _.menu;
+				}(_p25)));
+	};
+};
+var _debois$elm_mdl$Material_Menu$Open = function (a) {
+	return {ctor: 'Open', _0: a};
+};
+var _debois$elm_mdl$Material_Menu$TopRight = {ctor: 'TopRight'};
+var _debois$elm_mdl$Material_Menu$topRight = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{alignment: _debois$elm_mdl$Material_Menu$TopRight});
+	});
+var _debois$elm_mdl$Material_Menu$TopLeft = {ctor: 'TopLeft'};
+var _debois$elm_mdl$Material_Menu$topLeft = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{alignment: _debois$elm_mdl$Material_Menu$TopLeft});
+	});
+var _debois$elm_mdl$Material_Menu$delay = F4(
+	function (alignment, height, offsetTop, offsetHeight) {
+		var t = (_elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$TopLeft) || _elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$TopRight)) ? ((((height - offsetTop) - offsetHeight) / height) * _debois$elm_mdl$Material_Menu$transitionDuration) : ((offsetTop / height) * _debois$elm_mdl$Material_Menu$transitionDuration);
+		return A2(
+			_debois$elm_mdl$Material_Options$css,
+			'transition-delay',
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				_elm_lang$core$Basics$toString(t),
+				's'));
+	});
+var _debois$elm_mdl$Material_Menu$view1 = F8(
+	function (lift, config, model, offsetTop, offsetHeight, index, summary, item) {
+		var canSelect = summary.config.enabled && (!_elm_lang$core$Native_Utils.eq(summary.config.onSelect, _elm_lang$core$Maybe$Nothing));
+		var hasRipple = config.ripple && canSelect;
+		var ripple = function (_p26) {
+			return lift(
+				A2(_debois$elm_mdl$Material_Menu$Ripple, index, _p26));
+		};
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$li,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-menu__item'),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect'),
+					config.ripple),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-menu__item--full-bleed-divider'),
+					summary.config.divider),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					A2(_debois$elm_mdl$Material_Options$css, 'background-color', 'rgb(238,238,238)'),
+					_elm_lang$core$Native_Utils.eq(
+						model.index,
+						_elm_lang$core$Maybe$Just(index))),
+					function () {
+					var _p27 = {
+						ctor: '_Tuple2',
+						_0: model.geometry,
+						_1: _debois$elm_mdl$Material_Menu$isActive(model)
+					};
+					if (((_p27.ctor === '_Tuple2') && (_p27._0.ctor === 'Just')) && (_p27._1 === true)) {
+						return A4(_debois$elm_mdl$Material_Menu$delay, config.alignment, _p27._0._0.menu.bounds.height, offsetTop, offsetHeight);
+					} else {
+						return _debois$elm_mdl$Material_Options$nop;
+					}
+				}(),
+					A2(_debois$elm_mdl$Material_Options$css, 'display', 'flex'),
+					A2(_debois$elm_mdl$Material_Options$css, 'align-items', 'center')
+				]),
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				A2(
+					_elm_lang$core$List$filterMap,
+					_elm_lang$core$Basics$identity,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							canSelect ? _elm_lang$core$Maybe$Just(
+							_elm_lang$html$Html_Events$onClick(
+								lift(
+									A2(_debois$elm_mdl$Material_Menu$Select, index, summary.config.onSelect)))) : _elm_lang$core$Maybe$Nothing,
+							_elm_lang$core$Basics$not(summary.config.enabled) ? _elm_lang$core$Maybe$Just(
+							A2(_elm_lang$html$Html_Attributes$attribute, 'disabled', 'disabled')) : _elm_lang$core$Maybe$Nothing,
+							_elm_lang$core$Maybe$Just(
+							A2(
+								_elm_lang$html$Html_Attributes$property,
+								'tabindex',
+								_elm_lang$core$Json_Encode$string('-1')))
+						])),
+				hasRipple ? _elm_lang$core$Native_List.fromArray(
+					[
+						A2(_debois$elm_mdl$Material_Ripple$downOn$, ripple, 'mousedown'),
+						A2(_debois$elm_mdl$Material_Ripple$downOn$, ripple, 'touchstart'),
+						A2(_debois$elm_mdl$Material_Ripple$upOn$, ripple, 'mouseup'),
+						A2(_debois$elm_mdl$Material_Ripple$upOn$, ripple, 'mouseleave'),
+						A2(_debois$elm_mdl$Material_Ripple$upOn$, ripple, 'touchend'),
+						A2(_debois$elm_mdl$Material_Ripple$upOn$, ripple, 'blur')
+					]) : _elm_lang$core$Native_List.fromArray(
+					[])),
+			hasRipple ? A2(
+				F2(
+					function (x, y) {
+						return A2(_elm_lang$core$Basics_ops['++'], x, y);
+					}),
+				item.html,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$html$Html_App$map,
+						ripple,
+						A2(
+							_debois$elm_mdl$Material_Ripple$view$,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$html$Html_Attributes$class('mdl-menu__item-ripple-container')
+								]),
+							A2(
+								_elm_lang$core$Maybe$withDefault,
+								_debois$elm_mdl$Material_Ripple$model,
+								A2(_elm_lang$core$Dict$get, index, model.ripples))))
+					])) : item.html);
+	});
+var _debois$elm_mdl$Material_Menu$BottomRight = {ctor: 'BottomRight'};
+var _debois$elm_mdl$Material_Menu$bottomRight = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{alignment: _debois$elm_mdl$Material_Menu$BottomRight});
+	});
+var _debois$elm_mdl$Material_Menu$BottomLeft = {ctor: 'BottomLeft'};
+var _debois$elm_mdl$Material_Menu$defaultConfig = {alignment: _debois$elm_mdl$Material_Menu$BottomLeft, ripple: false, icon: 'more_vert'};
+var _debois$elm_mdl$Material_Menu$bottomLeft = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{alignment: _debois$elm_mdl$Material_Menu$BottomLeft});
+	});
+var _debois$elm_mdl$Material_Menu$containerGeometry = F2(
+	function (alignment, geometry) {
+		return _debois$elm_mdl$Material_Options$many(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_debois$elm_mdl$Material_Options$css,
+					'width',
+					_debois$elm_mdl$Material_Menu$toPx(geometry.menu.bounds.width)),
+					A2(
+					_debois$elm_mdl$Material_Options$css,
+					'height',
+					_debois$elm_mdl$Material_Menu$toPx(geometry.menu.bounds.height)),
+					(_elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$BottomRight) || _elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$BottomLeft)) ? A2(
+					_debois$elm_mdl$Material_Options$css,
+					'top',
+					_debois$elm_mdl$Material_Menu$toPx(geometry.button.offsetTop + geometry.button.offsetHeight)) : _debois$elm_mdl$Material_Options$nop,
+					function () {
+					if (_elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$BottomRight) || _elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$TopRight)) {
+						var right = function (e) {
+							return e.bounds.left + e.bounds.width;
+						};
+						return A2(
+							_debois$elm_mdl$Material_Options$css,
+							'right',
+							_debois$elm_mdl$Material_Menu$toPx(
+								right(geometry.container) - right(geometry.menu)));
+					} else {
+						return _debois$elm_mdl$Material_Options$nop;
+					}
+				}(),
+					function () {
+					if (_elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$TopLeft) || _elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$TopRight)) {
+						var bottom = geometry.container.bounds.top + geometry.container.bounds.height;
+						return A2(
+							_debois$elm_mdl$Material_Options$css,
+							'bottom',
+							_debois$elm_mdl$Material_Menu$toPx(bottom - geometry.button.bounds.top));
+					} else {
+						return _debois$elm_mdl$Material_Options$nop;
+					}
+				}(),
+					(_elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$TopLeft) || _elm_lang$core$Native_Utils.eq(alignment, _debois$elm_mdl$Material_Menu$BottomLeft)) ? A2(
+					_debois$elm_mdl$Material_Options$css,
+					'left',
+					_debois$elm_mdl$Material_Menu$toPx(geometry.menu.offsetLeft)) : _debois$elm_mdl$Material_Options$nop
+				]));
+	});
+var _debois$elm_mdl$Material_Menu$view = F4(
+	function (lift, model, properties, items) {
+		var itemSummaries = A2(
+			_elm_lang$core$List$map,
+			function (_p28) {
+				return A2(
+					_debois$elm_mdl$Material_Options$collect,
+					_debois$elm_mdl$Material_Menu$defaultItemConfig,
+					function (_) {
+						return _.options;
+					}(_p28));
+			},
+			items);
+		var numItems = _elm_lang$core$List$length(items);
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Menu$defaultConfig, properties);
+		var config = summary.config;
+		var alignment = function () {
+			var _p29 = config.alignment;
+			switch (_p29.ctor) {
+				case 'BottomLeft':
+					return _debois$elm_mdl$Material_Options$cs('mdl-menu--bottom-left');
+				case 'BottomRight':
+					return _debois$elm_mdl$Material_Options$cs('mdl-menu--bottom-right');
+				case 'TopLeft':
+					return _debois$elm_mdl$Material_Options$cs('mdl-menu--top-left');
+				default:
+					return _debois$elm_mdl$Material_Options$cs('mdl-menu--top-right');
+			}
+		}();
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$div,
+			A2(
+				_elm_lang$core$List_ops['::'],
+				A2(_debois$elm_mdl$Material_Options$css, 'position', 'relative'),
+				properties),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_elm_lang$html$Html_App$map,
+					lift,
+					A3(
+						_debois$elm_mdl$Material_Options$styled,
+						_elm_lang$html$Html$button,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_debois$elm_mdl$Material_Options$cs('mdl-button'),
+								_debois$elm_mdl$Material_Options$cs('mdl-js-button'),
+								_debois$elm_mdl$Material_Options$cs('mdl-button--icon'),
+								A2(
+								_debois$elm_mdl$Material_Options$when,
+								_debois$elm_mdl$Material_Options_Internal$attribute(
+									_debois$elm_mdl$Material_Menu$onKeyDown(
+										_debois$elm_mdl$Material_Menu$Key(itemSummaries))),
+								_debois$elm_mdl$Material_Menu$isActive(model)),
+								A2(
+								_debois$elm_mdl$Material_Options$when,
+								_debois$elm_mdl$Material_Options_Internal$attribute(
+									A2(_debois$elm_mdl$Material_Menu$onClick, _debois$elm_mdl$Material_Menu_Geometry$decode, _debois$elm_mdl$Material_Menu$Open)),
+								!_elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opened)),
+								A2(
+								_debois$elm_mdl$Material_Options$when,
+								_debois$elm_mdl$Material_Options_Internal$attribute(
+									_elm_lang$html$Html_Events$onClick(_debois$elm_mdl$Material_Menu$Close)),
+								_debois$elm_mdl$Material_Menu$isActive(model))
+							]),
+						_elm_lang$core$Native_List.fromArray(
+							[
+								A2(
+								_debois$elm_mdl$Material_Icon$view,
+								config.icon,
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_debois$elm_mdl$Material_Options$cs('material-icons'),
+										A2(_debois$elm_mdl$Material_Options$css, 'pointer-events', 'none')
+									]))
+							]))),
+					A3(
+					_debois$elm_mdl$Material_Options$styled,
+					_elm_lang$html$Html$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-menu__container'),
+							_debois$elm_mdl$Material_Options$cs('is-upgraded'),
+							A2(
+							_debois$elm_mdl$Material_Options$when,
+							_debois$elm_mdl$Material_Options$cs('is-visible'),
+							_elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opened) || _elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Closing)),
+							A2(
+							_debois$elm_mdl$Material_Menu$withGeometry,
+							model,
+							_debois$elm_mdl$Material_Menu$containerGeometry(config.alignment))
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							A3(
+							_debois$elm_mdl$Material_Options$styled,
+							_elm_lang$html$Html$div,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_debois$elm_mdl$Material_Options$cs('mdl-menu__outline'),
+									alignment,
+									A2(
+									_debois$elm_mdl$Material_Menu$withGeometry,
+									model,
+									function (geometry) {
+										return _debois$elm_mdl$Material_Options$many(
+											_elm_lang$core$Native_List.fromArray(
+												[
+													A2(
+													_debois$elm_mdl$Material_Options$css,
+													'width',
+													_debois$elm_mdl$Material_Menu$toPx(geometry.menu.bounds.width)),
+													A2(
+													_debois$elm_mdl$Material_Options$css,
+													'height',
+													_debois$elm_mdl$Material_Menu$toPx(geometry.menu.bounds.height))
+												]));
+									})
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[])),
+							A3(
+							_debois$elm_mdl$Material_Options$styled,
+							_elm_lang$html$Html$ul,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_debois$elm_mdl$Material_Options$cs('mdl-menu'),
+									_debois$elm_mdl$Material_Options$cs('mdl-js-menu'),
+									A2(
+									_debois$elm_mdl$Material_Options$when,
+									_debois$elm_mdl$Material_Options$cs('is-animating'),
+									_elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Opening) || _elm_lang$core$Native_Utils.eq(model.animationState, _debois$elm_mdl$Material_Menu$Closing)),
+									A2(
+									_debois$elm_mdl$Material_Menu$withGeometry,
+									model,
+									A2(_debois$elm_mdl$Material_Menu$clip, model, config)),
+									alignment
+								]),
+							function () {
+								var _p30 = model.geometry;
+								if (_p30.ctor === 'Just') {
+									var _p31 = _p30._0;
+									return A6(
+										_elm_lang$core$List$map5,
+										A3(_debois$elm_mdl$Material_Menu$view1, lift, config, model),
+										_p31.offsetTops,
+										_p31.offsetHeights,
+										_elm_lang$core$Native_List.range(0, numItems - 1),
+										itemSummaries,
+										items);
+								} else {
+									return A4(
+										_elm_lang$core$List$map3,
+										A5(_debois$elm_mdl$Material_Menu$view1, lift, config, model, 0, 0),
+										_elm_lang$core$Native_List.range(0, numItems - 1),
+										itemSummaries,
+										items);
+								}
+							}())
+						]))
+				]));
+	});
+var _debois$elm_mdl$Material_Menu$render = A5(
+	_debois$elm_parts$Parts$create,
+	_debois$elm_mdl$Material_Menu$view,
+	_debois$elm_mdl$Material_Menu$update$,
+	function (_) {
+		return _.menu;
+	},
+	F2(
+		function (x, y) {
+			return _elm_lang$core$Native_Utils.update(
+				y,
+				{menu: x});
+		}),
+	_debois$elm_mdl$Material_Menu$defaultModel);
+
+var _debois$elm_mdl$Material_Snackbar$enqueue = F2(
+	function (contents, model) {
+		return _elm_lang$core$Native_Utils.update(
+			model,
+			{
+				queue: A2(
+					_elm_lang$core$List$append,
+					model.queue,
+					_elm_lang$core$Native_List.fromArray(
+						[contents]))
+			});
+	});
+var _debois$elm_mdl$Material_Snackbar$snackbar = F3(
+	function (payload, message, label) {
+		return {
+			message: message,
+			action: _elm_lang$core$Maybe$Just(label),
+			payload: payload,
+			timeout: 2750,
+			fade: 250
+		};
+	});
+var _debois$elm_mdl$Material_Snackbar$toast = F2(
+	function (payload, message) {
+		return {message: message, action: _elm_lang$core$Maybe$Nothing, payload: payload, timeout: 2750, fade: 250};
+	});
+var _debois$elm_mdl$Material_Snackbar$Contents = F5(
+	function (a, b, c, d, e) {
+		return {message: a, action: b, payload: c, timeout: d, fade: e};
+	});
+var _debois$elm_mdl$Material_Snackbar$Model = F3(
+	function (a, b, c) {
+		return {queue: a, state: b, seq: c};
+	});
+var _debois$elm_mdl$Material_Snackbar$Fading = function (a) {
+	return {ctor: 'Fading', _0: a};
+};
+var _debois$elm_mdl$Material_Snackbar$Active = function (a) {
+	return {ctor: 'Active', _0: a};
+};
+var _debois$elm_mdl$Material_Snackbar$Inert = {ctor: 'Inert'};
+var _debois$elm_mdl$Material_Snackbar$model = {
+	queue: _elm_lang$core$Native_List.fromArray(
+		[]),
+	state: _debois$elm_mdl$Material_Snackbar$Inert,
+	seq: -1
+};
+var _debois$elm_mdl$Material_Snackbar$Clicked = {ctor: 'Clicked'};
+var _debois$elm_mdl$Material_Snackbar$Timeout = {ctor: 'Timeout'};
+var _debois$elm_mdl$Material_Snackbar$Move = F2(
+	function (a, b) {
+		return {ctor: 'Move', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Snackbar$next = function (model) {
+	return _elm_lang$core$Platform_Cmd$map(
+		_debois$elm_mdl$Material_Snackbar$Move(model.seq));
+};
+var _debois$elm_mdl$Material_Snackbar$view = function (model) {
+	var isActive = function () {
+		var _p0 = model.state;
+		switch (_p0.ctor) {
+			case 'Inert':
+				return false;
+			case 'Active':
+				return true;
+			default:
+				return false;
+		}
+	}();
+	var contents = function () {
+		var _p1 = model.state;
+		switch (_p1.ctor) {
+			case 'Inert':
+				return _elm_lang$core$Maybe$Nothing;
+			case 'Active':
+				return _elm_lang$core$Maybe$Just(_p1._0);
+			default:
+				return _elm_lang$core$Maybe$Just(_p1._0);
+		}
+	}();
+	var action = A2(
+		_elm_lang$core$Maybe$andThen,
+		contents,
+		function (_) {
+			return _.action;
+		});
+	return A2(
+		_elm_lang$html$Html$div,
+		_elm_lang$core$Native_List.fromArray(
+			[
+				_elm_lang$html$Html_Attributes$classList(
+				_elm_lang$core$Native_List.fromArray(
+					[
+						{ctor: '_Tuple2', _0: 'mdl-js-snackbar', _1: true},
+						{ctor: '_Tuple2', _0: 'mdl-snackbar', _1: true},
+						{ctor: '_Tuple2', _0: 'mdl-snackbar--active', _1: isActive}
+					])),
+				A2(
+				_debois$elm_mdl$Material_Helpers$aria,
+				'hidden',
+				_elm_lang$core$Basics$not(isActive))
+			]),
+		_elm_lang$core$Native_List.fromArray(
+			[
+				A2(
+				_elm_lang$html$Html$div,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_elm_lang$html$Html_Attributes$class('mdl-snackbar__text')
+					]),
+				A2(
+					_elm_lang$core$Maybe$withDefault,
+					_elm_lang$core$Native_List.fromArray(
+						[]),
+					A2(
+						_elm_lang$core$Maybe$map,
+						function (c) {
+							return _elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$html$Html$text(c.message)
+								]);
+						},
+						contents))),
+				A2(
+				_elm_lang$html$Html$button,
+				A2(
+					_elm_lang$core$List_ops['::'],
+					_elm_lang$html$Html_Attributes$class('mdl-snackbar__action'),
+					A2(
+						_elm_lang$core$List_ops['::'],
+						_elm_lang$html$Html_Attributes$type$('button'),
+						A2(
+							_elm_lang$core$List_ops['::'],
+							A2(
+								_debois$elm_mdl$Material_Helpers$aria,
+								'hidden',
+								A2(
+									_elm_lang$core$Maybe$withDefault,
+									true,
+									A2(
+										_elm_lang$core$Maybe$map,
+										_elm_lang$core$Basics$always(
+											_elm_lang$core$Basics$not(isActive)),
+										action))),
+							A2(
+								_elm_lang$core$Maybe$withDefault,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								A2(
+									_elm_lang$core$Maybe$map,
+									_elm_lang$core$Basics$always(
+										_elm_lang$core$Native_List.fromArray(
+											[
+												_elm_lang$html$Html_Events$onClick(
+												A2(_debois$elm_mdl$Material_Snackbar$Move, model.seq, _debois$elm_mdl$Material_Snackbar$Clicked))
+											])),
+									action))))),
+				A2(
+					_elm_lang$core$Maybe$withDefault,
+					_elm_lang$core$Native_List.fromArray(
+						[]),
+					A2(
+						_elm_lang$core$Maybe$map,
+						function (action) {
+							return _elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$html$Html$text(action)
+								]);
+						},
+						action)))
+			]));
+};
+var _debois$elm_mdl$Material_Snackbar$Click = function (a) {
+	return {ctor: 'Click', _0: a};
+};
+var _debois$elm_mdl$Material_Snackbar$End = function (a) {
+	return {ctor: 'End', _0: a};
+};
+var _debois$elm_mdl$Material_Snackbar$Begin = function (a) {
+	return {ctor: 'Begin', _0: a};
+};
+var _debois$elm_mdl$Material_Snackbar$tryDequeue = function (model) {
+	var _p2 = {ctor: '_Tuple2', _0: model.state, _1: model.queue};
+	if (((_p2.ctor === '_Tuple2') && (_p2._0.ctor === 'Inert')) && (_p2._1.ctor === '::')) {
+		var _p3 = _p2._1._0;
+		return {
+			ctor: '_Tuple2',
+			_0: _elm_lang$core$Native_Utils.update(
+				model,
+				{
+					state: _debois$elm_mdl$Material_Snackbar$Active(_p3),
+					queue: _p2._1._1,
+					seq: model.seq + 1
+				}),
+			_1: _elm_lang$core$Platform_Cmd$batch(
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$core$Platform_Cmd$map,
+						_debois$elm_mdl$Material_Snackbar$Move(model.seq + 1),
+						A2(_debois$elm_mdl$Material_Helpers$delay, _p3.timeout, _debois$elm_mdl$Material_Snackbar$Timeout)),
+						_debois$elm_mdl$Material_Helpers$cmd(
+						_debois$elm_mdl$Material_Snackbar$Begin(_p3.payload))
+					]))
+		};
+	} else {
+		return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+	}
+};
+var _debois$elm_mdl$Material_Snackbar$move = F2(
+	function (transition, model) {
+		var _p4 = {ctor: '_Tuple2', _0: model.state, _1: transition};
+		_v3_4:
+		do {
+			if (_p4.ctor === '_Tuple2') {
+				if (_p4._1.ctor === 'Clicked') {
+					if (_p4._0.ctor === 'Active') {
+						var _p5 = _p4._0._0;
+						return {
+							ctor: '_Tuple2',
+							_0: _elm_lang$core$Native_Utils.update(
+								model,
+								{
+									state: _debois$elm_mdl$Material_Snackbar$Fading(_p5)
+								}),
+							_1: _elm_lang$core$Platform_Cmd$batch(
+								_elm_lang$core$Native_List.fromArray(
+									[
+										A2(
+										_debois$elm_mdl$Material_Snackbar$next,
+										model,
+										A2(_debois$elm_mdl$Material_Helpers$delay, _p5.fade, _debois$elm_mdl$Material_Snackbar$Timeout)),
+										_debois$elm_mdl$Material_Helpers$cmd(
+										_debois$elm_mdl$Material_Snackbar$Click(_p5.payload))
+									]))
+						};
+					} else {
+						break _v3_4;
+					}
+				} else {
+					switch (_p4._0.ctor) {
+						case 'Inert':
+							return _debois$elm_mdl$Material_Snackbar$tryDequeue(model);
+						case 'Active':
+							var _p6 = _p4._0._0;
+							return {
+								ctor: '_Tuple2',
+								_0: _elm_lang$core$Native_Utils.update(
+									model,
+									{
+										state: _debois$elm_mdl$Material_Snackbar$Fading(_p6)
+									}),
+								_1: _elm_lang$core$Platform_Cmd$batch(
+									_elm_lang$core$Native_List.fromArray(
+										[
+											A2(
+											_debois$elm_mdl$Material_Snackbar$next,
+											model,
+											A2(_debois$elm_mdl$Material_Helpers$delay, _p6.fade, _debois$elm_mdl$Material_Snackbar$Timeout))
+										]))
+							};
+						default:
+							return {
+								ctor: '_Tuple2',
+								_0: _elm_lang$core$Native_Utils.update(
+									model,
+									{state: _debois$elm_mdl$Material_Snackbar$Inert}),
+								_1: _elm_lang$core$Platform_Cmd$batch(
+									_elm_lang$core$Native_List.fromArray(
+										[
+											A2(
+											_debois$elm_mdl$Material_Snackbar$next,
+											model,
+											_debois$elm_mdl$Material_Helpers$cmd(_debois$elm_mdl$Material_Snackbar$Timeout)),
+											_debois$elm_mdl$Material_Helpers$cmd(
+											_debois$elm_mdl$Material_Snackbar$End(_p4._0._0.payload))
+										]))
+							};
+					}
+				}
+			} else {
+				break _v3_4;
+			}
+		} while(false);
+		return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+	});
+var _debois$elm_mdl$Material_Snackbar$update = F2(
+	function (action, model) {
+		var _p7 = action;
+		if (_p7.ctor === 'Move') {
+			return _elm_lang$core$Native_Utils.eq(_p7._0, model.seq) ? A2(_debois$elm_mdl$Material_Snackbar$move, _p7._1, model) : {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+		} else {
+			return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+		}
+	});
+var _debois$elm_mdl$Material_Snackbar$add = F2(
+	function (contents, model) {
+		return _debois$elm_mdl$Material_Snackbar$tryDequeue(
+			A2(_debois$elm_mdl$Material_Snackbar$enqueue, contents, model));
+	});
+
+var _elm_lang$html$Html_Keyed$node = _elm_lang$virtual_dom$VirtualDom$keyedNode;
+var _elm_lang$html$Html_Keyed$ol = _elm_lang$html$Html_Keyed$node('ol');
+var _elm_lang$html$Html_Keyed$ul = _elm_lang$html$Html_Keyed$node('ul');
+
+var _elm_lang$window$Native_Window = function()
+{
+
+var size = _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)	{
+	callback(_elm_lang$core$Native_Scheduler.succeed({
+		width: window.innerWidth,
+		height: window.innerHeight
+	}));
+});
+
+return {
+	size: size
+};
+
+}();
+var _elm_lang$window$Window_ops = _elm_lang$window$Window_ops || {};
+_elm_lang$window$Window_ops['&>'] = F2(
+	function (t1, t2) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			t1,
+			function (_p0) {
+				return t2;
+			});
+	});
+var _elm_lang$window$Window$onSelfMsg = F3(
+	function (router, dimensions, state) {
+		var _p1 = state;
+		if (_p1.ctor === 'Nothing') {
+			return _elm_lang$core$Task$succeed(state);
+		} else {
+			var send = function (_p2) {
+				var _p3 = _p2;
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					_p3._0(dimensions));
+			};
+			return A2(
+				_elm_lang$window$Window_ops['&>'],
+				_elm_lang$core$Task$sequence(
+					A2(_elm_lang$core$List$map, send, _p1._0.subs)),
+				_elm_lang$core$Task$succeed(state));
+		}
+	});
+var _elm_lang$window$Window$init = _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
+var _elm_lang$window$Window$size = _elm_lang$window$Native_Window.size;
+var _elm_lang$window$Window$width = A2(
+	_elm_lang$core$Task$map,
+	function (_) {
+		return _.width;
+	},
+	_elm_lang$window$Window$size);
+var _elm_lang$window$Window$height = A2(
+	_elm_lang$core$Task$map,
+	function (_) {
+		return _.height;
+	},
+	_elm_lang$window$Window$size);
+var _elm_lang$window$Window$onEffects = F3(
+	function (router, newSubs, oldState) {
+		var _p4 = {ctor: '_Tuple2', _0: oldState, _1: newSubs};
+		if (_p4._0.ctor === 'Nothing') {
+			if (_p4._1.ctor === '[]') {
+				return _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
+			} else {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					_elm_lang$core$Process$spawn(
+						A3(
+							_elm_lang$dom$Dom_LowLevel$onWindow,
+							'resize',
+							_elm_lang$core$Json_Decode$succeed(
+								{ctor: '_Tuple0'}),
+							function (_p5) {
+								return A2(
+									_elm_lang$core$Task$andThen,
+									_elm_lang$window$Window$size,
+									_elm_lang$core$Platform$sendToSelf(router));
+							})),
+					function (pid) {
+						return _elm_lang$core$Task$succeed(
+							_elm_lang$core$Maybe$Just(
+								{subs: newSubs, pid: pid}));
+					});
+			}
+		} else {
+			if (_p4._1.ctor === '[]') {
+				return A2(
+					_elm_lang$window$Window_ops['&>'],
+					_elm_lang$core$Process$kill(_p4._0._0.pid),
+					_elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing));
+			} else {
+				return _elm_lang$core$Task$succeed(
+					_elm_lang$core$Maybe$Just(
+						{subs: newSubs, pid: _p4._0._0.pid}));
+			}
+		}
+	});
+var _elm_lang$window$Window$subscription = _elm_lang$core$Native_Platform.leaf('Window');
+var _elm_lang$window$Window$Size = F2(
+	function (a, b) {
+		return {width: a, height: b};
+	});
+var _elm_lang$window$Window$MySub = function (a) {
+	return {ctor: 'MySub', _0: a};
+};
+var _elm_lang$window$Window$resizes = function (tagger) {
+	return _elm_lang$window$Window$subscription(
+		_elm_lang$window$Window$MySub(tagger));
+};
+var _elm_lang$window$Window$subMap = F2(
+	function (func, _p6) {
+		var _p7 = _p6;
+		return _elm_lang$window$Window$MySub(
+			function (_p8) {
+				return func(
+					_p7._0(_p8));
+			});
+	});
+_elm_lang$core$Native_Platform.effectManagers['Window'] = {pkg: 'elm-lang/window', init: _elm_lang$window$Window$init, onEffects: _elm_lang$window$Window$onEffects, onSelfMsg: _elm_lang$window$Window$onSelfMsg, tag: 'sub', subMap: _elm_lang$window$Window$subMap};
+
+var _debois$elm_mdl$Material_Layout$drawerView = F3(
+	function (lift, isVisible, elems) {
+		return A2(
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html_Attributes$classList(
+					_elm_lang$core$Native_List.fromArray(
+						[
+							{ctor: '_Tuple2', _0: 'mdl-layout__drawer', _1: true},
+							{ctor: '_Tuple2', _0: 'is-visible', _1: isVisible}
+						])),
+					A2(
+					_elm_lang$html$Html_Attributes$attribute,
+					'aria-hidden',
+					isVisible ? 'false' : 'true')
+				]),
+			elems);
+	});
+var _debois$elm_mdl$Material_Layout$onKeypressFilterSpaceAndEnter = A2(_elm_lang$html$Html_Attributes$attribute, 'onkeypress', '\n  (function (evt) {\n     if (evt && evt.type === \"keydown\" && (evt.keyCode === 32 || evt.keyCode === 13)) {\n       evt.preventDefault();\n     }\n   })(window.event);\n  ');
+var _debois$elm_mdl$Material_Layout$toList = function (x) {
+	var _p0 = x;
+	if (_p0.ctor === 'Nothing') {
+		return _elm_lang$core$Native_List.fromArray(
+			[]);
+	} else {
+		return _elm_lang$core$Native_List.fromArray(
+			[_p0._0]);
+	}
+};
+var _debois$elm_mdl$Material_Layout$isWaterfall = function (mode) {
+	var _p1 = mode;
+	if (_p1.ctor === 'Waterfall') {
+		return true;
+	} else {
+		return false;
+	}
+};
+var _debois$elm_mdl$Material_Layout$row = function (styles) {
+	return _debois$elm_mdl$Material_Options$div(
+		A2(
+			_elm_lang$core$List_ops['::'],
+			_debois$elm_mdl$Material_Options$cs('mdl-layout__header-row'),
+			styles));
+};
+var _debois$elm_mdl$Material_Layout$link = F2(
+	function (styles, contents) {
+		return A3(
+			_debois$elm_mdl$Material_Options$styled,
+			_elm_lang$html$Html$a,
+			A2(
+				_elm_lang$core$List_ops['::'],
+				_debois$elm_mdl$Material_Options$cs('mdl-navigation__link'),
+				A2(
+					_elm_lang$core$List_ops['::'],
+					_debois$elm_mdl$Material_Options_Internal$attribute(
+						A2(_elm_lang$html$Html_Attributes$attribute, 'tabindex', '1')),
+					styles)),
+			contents);
+	});
+var _debois$elm_mdl$Material_Layout$href = function (_p2) {
+	return _debois$elm_mdl$Material_Options_Internal$attribute(
+		_elm_lang$html$Html_Attributes$href(_p2));
+};
+var _debois$elm_mdl$Material_Layout$onClick = function (_p3) {
+	return _debois$elm_mdl$Material_Options_Internal$attribute(
+		_elm_lang$html$Html_Events$onClick(_p3));
+};
+var _debois$elm_mdl$Material_Layout$navigation = F2(
+	function (styles, contents) {
+		return A2(
+			_elm_lang$html$Html$nav,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html_Attributes$class('mdl-navigation')
+				]),
+			contents);
+	});
+var _debois$elm_mdl$Material_Layout$title = function (styles) {
+	return _debois$elm_mdl$Material_Options$span(
+		A2(
+			_elm_lang$core$List_ops['::'],
+			_debois$elm_mdl$Material_Options$cs('mdl-layout__title'),
+			styles));
+};
+var _debois$elm_mdl$Material_Layout$spacer = A2(
+	_elm_lang$html$Html$div,
+	_elm_lang$core$Native_List.fromArray(
+		[
+			_elm_lang$html$Html_Attributes$class('mdl-layout-spacer')
+		]),
+	_elm_lang$core$Native_List.fromArray(
+		[]));
+var _debois$elm_mdl$Material_Layout$onSelectTab = function (f) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					onSelectTab: _elm_lang$core$Maybe$Just(
+						function (_p4) {
+							return _elm_lang$html$Html_Events$onClick(
+								f(_p4));
+						})
+				});
+		});
+};
+var _debois$elm_mdl$Material_Layout$moreTabs = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{moreTabs: true});
+	});
+var _debois$elm_mdl$Material_Layout$selectedTab = function (k) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{selectedTab: k});
+		});
+};
+var _debois$elm_mdl$Material_Layout$transparentHeader = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{transparentHeader: true});
+	});
+var _debois$elm_mdl$Material_Layout$rippleTabs = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{rippleTabs: true});
+	});
+var _debois$elm_mdl$Material_Layout$fixedTabs = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{fixedTabs: true});
+	});
+var _debois$elm_mdl$Material_Layout$fixedDrawer = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{fixedDrawer: true});
+	});
+var _debois$elm_mdl$Material_Layout$fixedHeader = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{fixedHeader: true});
+	});
+var _debois$elm_mdl$Material_Layout$setTabsWidth$ = F2(
+	function (width, model) {
+		var x = model.tabScrollState;
+		return _elm_lang$core$Native_Utils.update(
+			model,
+			{
+				tabScrollState: _elm_lang$core$Native_Utils.update(
+					x,
+					{
+						width: _elm_lang$core$Maybe$Just(width)
+					})
+			});
+	});
+var _debois$elm_mdl$Material_Layout$setTabsWidth = F2(
+	function (w, container) {
+		return _elm_lang$core$Native_Utils.update(
+			container,
+			{
+				layout: A2(_debois$elm_mdl$Material_Layout$setTabsWidth$, w, container.layout)
+			});
+	});
+var _debois$elm_mdl$Material_Layout$defaultTabScrollState = {canScrollRight: true, canScrollLeft: false, width: _elm_lang$core$Maybe$Nothing};
+var _debois$elm_mdl$Material_Layout$defaultModel = {ripples: _elm_lang$core$Dict$empty, isSmallScreen: false, isCompact: false, isAnimating: false, isScrolled: false, isDrawerOpen: false, tabScrollState: _debois$elm_mdl$Material_Layout$defaultTabScrollState};
+var _debois$elm_mdl$Material_Layout$TabScrollState = F3(
+	function (a, b, c) {
+		return {canScrollLeft: a, canScrollRight: b, width: c};
+	});
+var _debois$elm_mdl$Material_Layout$Model = F7(
+	function (a, b, c, d, e, f, g) {
+		return {ripples: a, isSmallScreen: b, isCompact: c, isAnimating: d, isScrolled: e, isDrawerOpen: f, tabScrollState: g};
+	});
+var _debois$elm_mdl$Material_Layout$Config = F9(
+	function (a, b, c, d, e, f, g, h, i) {
+		return {fixedHeader: a, fixedDrawer: b, fixedTabs: c, rippleTabs: d, mode: e, selectedTab: f, onSelectTab: g, transparentHeader: h, moreTabs: i};
+	});
+var _debois$elm_mdl$Material_Layout$Contents = F4(
+	function (a, b, c, d) {
+		return {header: a, drawer: b, tabs: c, main: d};
+	});
+var _debois$elm_mdl$Material_Layout$Ripple = F2(
+	function (a, b) {
+		return {ctor: 'Ripple', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Layout$NOP = {ctor: 'NOP'};
+var _debois$elm_mdl$Material_Layout$TransitionEnd = {ctor: 'TransitionEnd'};
+var _debois$elm_mdl$Material_Layout$TransitionHeader = function (a) {
+	return {ctor: 'TransitionHeader', _0: a};
+};
+var _debois$elm_mdl$Material_Layout$update$ = F3(
+	function (f, action, model) {
+		update$:
+		while (true) {
+			var _p5 = action;
+			switch (_p5.ctor) {
+				case 'NOP':
+					return _elm_lang$core$Maybe$Nothing;
+				case 'Resize':
+					var _p6 = _p5._0;
+					var tabScrollState = A2(
+						_elm_lang$core$Maybe$withDefault,
+						model.tabScrollState,
+						A2(
+							_elm_lang$core$Maybe$map,
+							function (tabsWidth) {
+								var tabScrollState = model.tabScrollState;
+								return _elm_lang$core$Native_Utils.update(
+									tabScrollState,
+									{
+										canScrollRight: _elm_lang$core$Native_Utils.cmp(tabsWidth + (2 * 56), _p6) > 0
+									});
+							},
+							model.tabScrollState.width));
+					var isSmall = _elm_lang$core$Native_Utils.cmp(1024, _p6) > 0;
+					return (_elm_lang$core$Native_Utils.eq(isSmall, model.isSmallScreen) && _elm_lang$core$Native_Utils.eq(tabScrollState.canScrollRight, model.tabScrollState.canScrollRight)) ? _elm_lang$core$Maybe$Nothing : _elm_lang$core$Maybe$Just(
+						_debois$elm_mdl$Material_Helpers$pure(
+							_elm_lang$core$Native_Utils.update(
+								model,
+								{
+									isSmallScreen: isSmall,
+									isDrawerOpen: _elm_lang$core$Basics$not(isSmall) && model.isDrawerOpen,
+									tabScrollState: tabScrollState
+								})));
+				case 'ToggleDrawer':
+					return _elm_lang$core$Maybe$Just(
+						_debois$elm_mdl$Material_Helpers$pure(
+							_elm_lang$core$Native_Utils.update(
+								model,
+								{
+									isDrawerOpen: _elm_lang$core$Basics$not(model.isDrawerOpen)
+								})));
+				case 'Ripple':
+					var _p8 = _p5._0;
+					return _elm_lang$core$Maybe$Just(
+						A2(
+							_debois$elm_mdl$Material_Helpers$map2nd,
+							_elm_lang$core$Platform_Cmd$map(
+								function (_p7) {
+									return f(
+										A2(_debois$elm_mdl$Material_Layout$Ripple, _p8, _p7));
+								}),
+							A2(
+								_debois$elm_mdl$Material_Helpers$map1st,
+								function (ripple$) {
+									return _elm_lang$core$Native_Utils.update(
+										model,
+										{
+											ripples: A3(_elm_lang$core$Dict$insert, _p8, ripple$, model.ripples)
+										});
+								},
+								A2(
+									_debois$elm_mdl$Material_Ripple$update,
+									_p5._1,
+									A2(
+										_elm_lang$core$Maybe$withDefault,
+										_debois$elm_mdl$Material_Ripple$model,
+										A2(_elm_lang$core$Dict$get, _p8, model.ripples))))));
+				case 'ScrollTab':
+					var _p9 = _p5._0;
+					return (!_elm_lang$core$Native_Utils.eq(model.tabScrollState, _p9)) ? _elm_lang$core$Maybe$Just(
+						_debois$elm_mdl$Material_Helpers$pure(
+							_elm_lang$core$Native_Utils.update(
+								model,
+								{tabScrollState: _p9}))) : _elm_lang$core$Maybe$Nothing;
+				case 'ScrollPane':
+					var isScrolled = _elm_lang$core$Native_Utils.cmp(0.0, _p5._1) < 0;
+					if (!_elm_lang$core$Native_Utils.eq(isScrolled, model.isScrolled)) {
+						var _v3 = f,
+							_v4 = _debois$elm_mdl$Material_Layout$TransitionHeader(
+							{toCompact: isScrolled, fixedHeader: _p5._0}),
+							_v5 = _elm_lang$core$Native_Utils.update(
+							model,
+							{isScrolled: isScrolled});
+						f = _v3;
+						action = _v4;
+						model = _v5;
+						continue update$;
+					} else {
+						return _elm_lang$core$Maybe$Nothing;
+					}
+				case 'TransitionHeader':
+					return _elm_lang$core$Basics$not(model.isAnimating) ? _elm_lang$core$Maybe$Just(
+						{
+							ctor: '_Tuple2',
+							_0: _elm_lang$core$Native_Utils.update(
+								model,
+								{
+									isCompact: _p5._0.toCompact,
+									isAnimating: _elm_lang$core$Basics$not(model.isSmallScreen) || _p5._0.fixedHeader
+								}),
+							_1: _elm_lang$core$Platform_Cmd$none
+						}) : _elm_lang$core$Maybe$Nothing;
+				default:
+					return _elm_lang$core$Maybe$Just(
+						_debois$elm_mdl$Material_Helpers$pure(
+							_elm_lang$core$Native_Utils.update(
+								model,
+								{isAnimating: false})));
+			}
+		}
+	});
+var _debois$elm_mdl$Material_Layout$update = F2(
+	function (msg, model) {
+		return A2(
+			_elm_lang$core$Maybe$withDefault,
+			{ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none},
+			A3(_debois$elm_mdl$Material_Layout$update$, _elm_lang$core$Basics$identity, msg, model));
+	});
+var _debois$elm_mdl$Material_Layout$pack = function (fwd) {
+	return A4(
+		_debois$elm_parts$Parts$pack1,
+		_debois$elm_mdl$Material_Layout$update$,
+		function (_) {
+			return _.layout;
+		},
+		F2(
+			function (x, c) {
+				return _elm_lang$core$Native_Utils.update(
+					c,
+					{layout: x});
+			}),
+		fwd);
+};
+var _debois$elm_mdl$Material_Layout$ScrollPane = F2(
+	function (a, b) {
+		return {ctor: 'ScrollPane', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Layout$ScrollTab = function (a) {
+	return {ctor: 'ScrollTab', _0: a};
+};
+var _debois$elm_mdl$Material_Layout$Resize = function (a) {
+	return {ctor: 'Resize', _0: a};
+};
+var _debois$elm_mdl$Material_Layout$init = function () {
+	var measureScreenSize = A3(
+		_elm_lang$core$Task$perform,
+		function (_p10) {
+			return _debois$elm_mdl$Material_Layout$Resize(
+				A2(_elm_lang$core$Debug$log, 'Can\'t get initial window dimensions. Guessing ', 1025));
+		},
+		_debois$elm_mdl$Material_Layout$Resize,
+		_elm_lang$window$Window$width);
+	return {ctor: '_Tuple2', _0: _debois$elm_mdl$Material_Layout$defaultModel, _1: measureScreenSize};
+}();
+var _debois$elm_mdl$Material_Layout$sub0 = function (lift) {
+	return A2(
+		_elm_lang$core$Platform_Cmd$map,
+		_debois$elm_mdl$Material_Layout$pack(lift),
+		_elm_lang$core$Basics$snd(_debois$elm_mdl$Material_Layout$init));
+};
+var _debois$elm_mdl$Material_Layout$subscriptions = function (model) {
+	return _elm_lang$window$Window$resizes(
+		function (_p11) {
+			return _debois$elm_mdl$Material_Layout$Resize(
+				function (_) {
+					return _.width;
+				}(_p11));
+		});
+};
+var _debois$elm_mdl$Material_Layout$subs = function (lift) {
+	return function (_p12) {
+		return A2(
+			_elm_lang$core$Platform_Sub$map,
+			_debois$elm_mdl$Material_Layout$pack(lift),
+			_debois$elm_mdl$Material_Layout$subscriptions(
+				function (_) {
+					return _.layout;
+				}(_p12)));
+	};
+};
+var _debois$elm_mdl$Material_Layout$ToggleDrawer = {ctor: 'ToggleDrawer'};
+var _debois$elm_mdl$Material_Layout$drawerButton = F2(
+	function (lift, isVisible) {
+		return A2(
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_elm_lang$html$Html$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$classList(
+							_elm_lang$core$Native_List.fromArray(
+								[
+									{ctor: '_Tuple2', _0: 'mdl-layout__drawer-button', _1: true}
+								])),
+							A2(
+							_elm_lang$html$Html_Attributes$attribute,
+							'aria-expanded',
+							isVisible ? 'true' : 'false'),
+							_elm_lang$html$Html_Attributes$tabindex(1),
+							_elm_lang$html$Html_Events$onClick(
+							lift(_debois$elm_mdl$Material_Layout$ToggleDrawer)),
+							A3(
+							_elm_lang$html$Html_Events$onWithOptions,
+							'keydown',
+							{stopPropagation: false, preventDefault: false},
+							A2(
+								_elm_lang$core$Json_Decode$map,
+								function (_p13) {
+									return lift(
+										function (key) {
+											var _p14 = key;
+											switch (_p14) {
+												case 32:
+													return _debois$elm_mdl$Material_Layout$ToggleDrawer;
+												case 13:
+													return _debois$elm_mdl$Material_Layout$ToggleDrawer;
+												default:
+													return _debois$elm_mdl$Material_Layout$NOP;
+											}
+										}(_p13));
+								},
+								_elm_lang$html$Html_Events$keyCode))
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Icon$i('menu')
+						]))
+				]));
+	});
+var _debois$elm_mdl$Material_Layout$obfuscator = F2(
+	function (lift, isVisible) {
+		return A2(
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html_Attributes$classList(
+					_elm_lang$core$Native_List.fromArray(
+						[
+							{ctor: '_Tuple2', _0: 'mdl-layout__obfuscator', _1: true},
+							{ctor: '_Tuple2', _0: 'is-visible', _1: isVisible}
+						])),
+					_elm_lang$html$Html_Events$onClick(
+					lift(_debois$elm_mdl$Material_Layout$ToggleDrawer))
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[]));
+	});
+var _debois$elm_mdl$Material_Layout$toggleDrawer = function (lift) {
+	return A2(_debois$elm_mdl$Material_Layout$pack, lift, _debois$elm_mdl$Material_Layout$ToggleDrawer);
+};
+var _debois$elm_mdl$Material_Layout$LinkProp = {ctor: 'LinkProp'};
+var _debois$elm_mdl$Material_Layout$Waterfall = function (a) {
+	return {ctor: 'Waterfall', _0: a};
+};
+var _debois$elm_mdl$Material_Layout$waterfall = function (b) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					mode: _debois$elm_mdl$Material_Layout$Waterfall(b)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Layout$Scrolling = {ctor: 'Scrolling'};
+var _debois$elm_mdl$Material_Layout$scrolling = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{mode: _debois$elm_mdl$Material_Layout$Scrolling});
+	});
+var _debois$elm_mdl$Material_Layout$Seamed = {ctor: 'Seamed'};
+var _debois$elm_mdl$Material_Layout$seamed = _debois$elm_mdl$Material_Options$set(
+	function (config) {
+		return _elm_lang$core$Native_Utils.update(
+			config,
+			{mode: _debois$elm_mdl$Material_Layout$Seamed});
+	});
+var _debois$elm_mdl$Material_Layout$Standard = {ctor: 'Standard'};
+var _debois$elm_mdl$Material_Layout$defaultConfig = {fixedHeader: false, fixedDrawer: false, fixedTabs: false, rippleTabs: true, mode: _debois$elm_mdl$Material_Layout$Standard, onSelectTab: _elm_lang$core$Maybe$Nothing, selectedTab: -1, moreTabs: false, transparentHeader: false};
+var _debois$elm_mdl$Material_Layout$headerView = F4(
+	function (lift, config, model, _p15) {
+		var _p16 = _p15;
+		var mode = function () {
+			var _p17 = config.mode;
+			switch (_p17.ctor) {
+				case 'Standard':
+					return _debois$elm_mdl$Material_Options$nop;
+				case 'Scrolling':
+					return _debois$elm_mdl$Material_Options$cs('mdl-layout__header--scroll');
+				case 'Seamed':
+					return _debois$elm_mdl$Material_Options$cs('mdl-layout__header--seamed');
+				default:
+					if (_p17._0 === true) {
+						return _debois$elm_mdl$Material_Options$cs('mdl-layout__header--waterfall mdl-layout__header--waterfall-hide-top');
+					} else {
+						return _debois$elm_mdl$Material_Options$cs('mdl-layout__header--waterfall');
+					}
+			}
+		}();
+		return A3(
+			_debois$elm_mdl$Material_Options$styled,
+			_elm_lang$html$Html$header,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-layout__header'),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('is-casting-shadow'),
+					_elm_lang$core$Native_Utils.eq(config.mode, _debois$elm_mdl$Material_Layout$Standard) || (_debois$elm_mdl$Material_Layout$isWaterfall(config.mode) && model.isCompact)),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('is-animating'),
+					model.isAnimating),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('is-compact'),
+					model.isCompact),
+					mode,
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-layout__header--transparent'),
+					config.transparentHeader),
+					_debois$elm_mdl$Material_Options$attribute(
+					_elm_lang$html$Html_Events$onClick(
+						lift(
+							_debois$elm_mdl$Material_Layout$TransitionHeader(
+								{toCompact: false, fixedHeader: config.fixedHeader})))),
+					_debois$elm_mdl$Material_Options$attribute(
+					A2(
+						_elm_lang$html$Html_Events$on,
+						'transitionend',
+						_elm_lang$core$Json_Decode$succeed(
+							lift(_debois$elm_mdl$Material_Layout$TransitionEnd))))
+				]),
+			A2(
+				_elm_lang$core$List$concatMap,
+				function (x) {
+					return x;
+				},
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_debois$elm_mdl$Material_Layout$toList(_p16._0),
+						_p16._1,
+						_debois$elm_mdl$Material_Layout$toList(_p16._2)
+					])));
+	});
+var _debois$elm_mdl$Material_Layout$Right = {ctor: 'Right'};
+var _debois$elm_mdl$Material_Layout$Left = {ctor: 'Left'};
+var _debois$elm_mdl$Material_Layout$tabsView = F4(
+	function (lift, config, model, _p18) {
+		var _p19 = _p18;
+		var _p22 = _p19._1;
+		var chevron = F2(
+			function (direction, offset) {
+				var dir = function () {
+					var _p20 = direction;
+					if (_p20.ctor === 'Left') {
+						return 'left';
+					} else {
+						return 'right';
+					}
+				}();
+				return A3(
+					_debois$elm_mdl$Material_Options$styled,
+					_elm_lang$html$Html$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-layout__tab-bar-button'),
+							_debois$elm_mdl$Material_Options$cs(
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								'mdl-layout__tab-bar-',
+								A2(_elm_lang$core$Basics_ops['++'], dir, '-button'))),
+							A2(
+							_debois$elm_mdl$Material_Options$when,
+							_debois$elm_mdl$Material_Options$cs('is-active'),
+							(_elm_lang$core$Native_Utils.eq(direction, _debois$elm_mdl$Material_Layout$Left) && model.tabScrollState.canScrollLeft) || (_elm_lang$core$Native_Utils.eq(direction, _debois$elm_mdl$Material_Layout$Right) && model.tabScrollState.canScrollRight)),
+							_debois$elm_mdl$Material_Options$many(_p22)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_debois$elm_mdl$Material_Icon$view,
+							A2(_elm_lang$core$Basics_ops['++'], 'chevron_', dir),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_debois$elm_mdl$Material_Icon$size24,
+									_debois$elm_mdl$Material_Options_Internal$attribute(
+									A2(
+										_elm_lang$html$Html_Attributes$attribute,
+										'onclick',
+										A2(
+											_elm_lang$core$Basics_ops['++'],
+											'document.getElementsByClassName(\'mdl-layout__tab-bar\')[0].scrollLeft += ',
+											_elm_lang$core$Basics$toString(offset))))
+								]))
+						]));
+			});
+		return A2(
+			_debois$elm_mdl$Material_Options$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-layout__tab-bar-container')
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(chevron, _debois$elm_mdl$Material_Layout$Left, -100),
+					A2(
+					_debois$elm_mdl$Material_Options$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-layout__tab-bar'),
+							A2(_debois$elm_mdl$Material_Options$css, 'position', 'relative'),
+							A2(_debois$elm_mdl$Material_Options$css, 'scroll-behavior', 'smooth'),
+							config.rippleTabs ? _debois$elm_mdl$Material_Options$many(
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect'),
+									_debois$elm_mdl$Material_Options$cs('mds-js-ripple-effect--ignore-events')
+								])) : _debois$elm_mdl$Material_Options$nop,
+							_elm_lang$core$Native_Utils.eq(config.mode, _debois$elm_mdl$Material_Layout$Standard) ? _debois$elm_mdl$Material_Options$cs('is-casting-shadow') : _debois$elm_mdl$Material_Options$nop,
+							_debois$elm_mdl$Material_Options$many(_p22),
+							_debois$elm_mdl$Material_Options_Internal$attribute(
+							A2(
+								_elm_lang$html$Html_Events$on,
+								'scroll',
+								_debois$elm_dom$DOM$target(
+									A4(
+										_elm_lang$core$Json_Decode$object3,
+										F3(
+											function (scrollWidth, clientWidth, scrollLeft) {
+												return lift(
+													_debois$elm_mdl$Material_Layout$ScrollTab(
+														{
+															canScrollLeft: _elm_lang$core$Native_Utils.cmp(scrollLeft, 0) > 0,
+															canScrollRight: _elm_lang$core$Native_Utils.cmp(scrollWidth - clientWidth, scrollLeft + 1) > 0,
+															width: _elm_lang$core$Maybe$Just(scrollWidth)
+														}));
+											}),
+										A2(_elm_lang$core$Json_Decode_ops[':='], 'scrollWidth', _elm_lang$core$Json_Decode$float),
+										A2(_elm_lang$core$Json_Decode_ops[':='], 'clientWidth', _elm_lang$core$Json_Decode$float),
+										A2(_elm_lang$core$Json_Decode_ops[':='], 'scrollLeft', _elm_lang$core$Json_Decode$float)))))
+						]),
+					A2(
+						_elm_lang$core$List$indexedMap,
+						F2(
+							function (tabIndex, tab) {
+								return A3(
+									_debois$elm_mdl$Material_Helpers$filter,
+									_elm_lang$html$Html$a,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$html$Html_Attributes$classList(
+											_elm_lang$core$Native_List.fromArray(
+												[
+													{ctor: '_Tuple2', _0: 'mdl-layout__tab', _1: true},
+													{
+													ctor: '_Tuple2',
+													_0: 'is-active',
+													_1: _elm_lang$core$Native_Utils.eq(tabIndex, config.selectedTab)
+												}
+												])),
+											A2(
+											_elm_lang$core$Maybe$withDefault,
+											_debois$elm_mdl$Material_Helpers$noAttr,
+											A2(
+												_elm_lang$core$Maybe$map,
+												F2(
+													function (x, y) {
+														return y(x);
+													})(tabIndex),
+												config.onSelectTab))
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$core$Maybe$Just(tab),
+											config.rippleTabs ? _elm_lang$core$Maybe$Just(
+											A2(
+												_elm_lang$html$Html_App$map,
+												function (_p21) {
+													return lift(
+														A2(_debois$elm_mdl$Material_Layout$Ripple, tabIndex, _p21));
+												},
+												A2(
+													_debois$elm_mdl$Material_Ripple$view,
+													_elm_lang$core$Native_List.fromArray(
+														[
+															_elm_lang$html$Html_Attributes$class('mdl-layout__tab-ripple-container')
+														]),
+													A2(
+														_elm_lang$core$Maybe$withDefault,
+														_debois$elm_mdl$Material_Ripple$model,
+														A2(_elm_lang$core$Dict$get, tabIndex, model.ripples))))) : _elm_lang$core$Maybe$Nothing
+										]));
+							}),
+						_p19._0)),
+					A2(chevron, _debois$elm_mdl$Material_Layout$Right, 100)
+				]));
+	});
+var _debois$elm_mdl$Material_Layout$view = F4(
+	function (lift, model, options, _p23) {
+		var _p24 = _p23;
+		var _p32 = _p24.tabs;
+		var _p31 = _p24.header;
+		var _p30 = _p24.drawer;
+		var hasDrawer = !_elm_lang$core$Native_Utils.eq(
+			_p30,
+			_elm_lang$core$Native_List.fromArray(
+				[]));
+		var hasTabs = _elm_lang$core$Basics$not(
+			_elm_lang$core$List$isEmpty(
+				_elm_lang$core$Basics$fst(_p32)));
+		var hasHeader = hasTabs || _elm_lang$core$Basics$not(
+			_elm_lang$core$List$isEmpty(_p31));
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Layout$defaultConfig, options);
+		var config = summary.config;
+		var drawerIsFixed = config.fixedDrawer && _elm_lang$core$Basics$not(model.isSmallScreen);
+		var drawerIsVisible = model.isDrawerOpen && _elm_lang$core$Basics$not(drawerIsFixed);
+		var _p25 = function () {
+			var _p26 = {ctor: '_Tuple3', _0: _p30, _1: _p31, _2: config.fixedHeader};
+			if ((_p26.ctor === '_Tuple3') && (_p26._0.ctor === '::')) {
+				if ((_p26._1.ctor === '::') && (_p26._2 === true)) {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Maybe$Nothing,
+						_1: _elm_lang$core$Maybe$Just(
+							A2(_debois$elm_mdl$Material_Layout$drawerButton, lift, drawerIsVisible))
+					};
+				} else {
+					return {
+						ctor: '_Tuple2',
+						_0: _elm_lang$core$Maybe$Just(
+							A2(_debois$elm_mdl$Material_Layout$drawerButton, lift, drawerIsVisible)),
+						_1: _elm_lang$core$Maybe$Nothing
+					};
+				}
+			} else {
+				return {ctor: '_Tuple2', _0: _elm_lang$core$Maybe$Nothing, _1: _elm_lang$core$Maybe$Nothing};
+			}
+		}();
+		var contentDrawerButton = _p25._0;
+		var headerDrawerButton = _p25._1;
+		var tabsElems = _elm_lang$core$Basics$not(hasTabs) ? _elm_lang$core$Maybe$Nothing : _elm_lang$core$Maybe$Just(
+			A4(_debois$elm_mdl$Material_Layout$tabsView, lift, config, model, _p32));
+		return A2(
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html_Attributes$classList(
+					_elm_lang$core$Native_List.fromArray(
+						[
+							{ctor: '_Tuple2', _0: 'mdl-layout__container', _1: true},
+							{
+							ctor: '_Tuple2',
+							_0: 'has-scrolling-header',
+							_1: _elm_lang$core$Native_Utils.eq(config.mode, _debois$elm_mdl$Material_Layout$Scrolling)
+						}
+						]))
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A3(
+					_debois$elm_mdl$Material_Helpers$filter,
+					_elm_lang$html$Html_Keyed$node('div'),
+					A2(
+						_elm_lang$core$List$filterMap,
+						_elm_lang$core$Basics$identity,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$core$Maybe$Just(
+								_elm_lang$html$Html_Attributes$classList(
+									_elm_lang$core$Native_List.fromArray(
+										[
+											{ctor: '_Tuple2', _0: 'mdl-layout ', _1: true},
+											{ctor: '_Tuple2', _0: 'is-upgraded', _1: true},
+											{ctor: '_Tuple2', _0: 'is-small-screen', _1: model.isSmallScreen},
+											{ctor: '_Tuple2', _0: 'has-drawer', _1: hasDrawer},
+											{ctor: '_Tuple2', _0: 'has-tabs', _1: hasTabs},
+											{ctor: '_Tuple2', _0: 'mdl-js-layout', _1: true},
+											{ctor: '_Tuple2', _0: 'mdl-layout--fixed-drawer', _1: config.fixedDrawer && hasDrawer},
+											{ctor: '_Tuple2', _0: 'mdl-layout--fixed-header', _1: config.fixedHeader && hasHeader},
+											{ctor: '_Tuple2', _0: 'mdl-layout--fixed-tabs', _1: config.fixedTabs && hasTabs}
+										]))),
+								drawerIsVisible ? _elm_lang$core$Maybe$Just(
+								A2(
+									_elm_lang$html$Html_Events$on,
+									'keydown',
+									A2(
+										_elm_lang$core$Json_Decode$map,
+										function (_p27) {
+											return lift(
+												function (key) {
+													return _elm_lang$core$Native_Utils.eq(key, 27) ? _debois$elm_mdl$Material_Layout$ToggleDrawer : _debois$elm_mdl$Material_Layout$NOP;
+												}(_p27));
+										},
+										_elm_lang$html$Html_Events$keyCode))) : _elm_lang$core$Maybe$Nothing
+							])),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							hasHeader ? _elm_lang$core$Maybe$Just(
+							A2(
+								F2(
+									function (v0, v1) {
+										return {ctor: '_Tuple2', _0: v0, _1: v1};
+									}),
+								'elm-mdl-header',
+								A4(
+									_debois$elm_mdl$Material_Layout$headerView,
+									lift,
+									config,
+									model,
+									{ctor: '_Tuple3', _0: headerDrawerButton, _1: _p31, _2: tabsElems}))) : _elm_lang$core$Maybe$Nothing,
+							_elm_lang$core$Basics$not(hasDrawer) ? _elm_lang$core$Maybe$Nothing : _elm_lang$core$Maybe$Just(
+							{
+								ctor: '_Tuple2',
+								_0: 'elm-mdl-drawer',
+								_1: A3(_debois$elm_mdl$Material_Layout$drawerView, lift, drawerIsVisible, _p30)
+							}),
+							_elm_lang$core$Basics$not(hasDrawer) ? _elm_lang$core$Maybe$Nothing : _elm_lang$core$Maybe$Just(
+							{
+								ctor: '_Tuple2',
+								_0: 'elm-mdl-obfuscator',
+								_1: A2(_debois$elm_mdl$Material_Layout$obfuscator, lift, drawerIsVisible)
+							}),
+							A2(
+							_elm_lang$core$Maybe$map,
+							F2(
+								function (v0, v1) {
+									return {ctor: '_Tuple2', _0: v0, _1: v1};
+								})('elm-drawer-button'),
+							contentDrawerButton),
+							_elm_lang$core$Maybe$Just(
+							A2(
+								F2(
+									function (v0, v1) {
+										return {ctor: '_Tuple2', _0: v0, _1: v1};
+									}),
+								_elm_lang$core$Basics$toString(config.selectedTab),
+								A3(
+									_debois$elm_mdl$Material_Options$styled,
+									_elm_lang$html$Html$main$,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_debois$elm_mdl$Material_Options$cs('mdl-layout__content'),
+											A2(
+											_debois$elm_mdl$Material_Options$when,
+											A2(_debois$elm_mdl$Material_Options$css, 'overflow-y', 'visible'),
+											_elm_lang$core$Native_Utils.eq(config.mode, _debois$elm_mdl$Material_Layout$Scrolling) && config.fixedHeader),
+											A2(
+											_debois$elm_mdl$Material_Options$when,
+											A2(_debois$elm_mdl$Material_Options$css, 'overflow-x', 'visible'),
+											_elm_lang$core$Native_Utils.eq(config.mode, _debois$elm_mdl$Material_Layout$Scrolling) && config.fixedHeader),
+											A2(
+											_debois$elm_mdl$Material_Options$when,
+											A2(_debois$elm_mdl$Material_Options$css, 'overflow', 'visible'),
+											_elm_lang$core$Native_Utils.eq(config.mode, _debois$elm_mdl$Material_Layout$Scrolling) && config.fixedHeader),
+											A2(
+											_debois$elm_mdl$Material_Options$when,
+											function (_p28) {
+												return _debois$elm_mdl$Material_Options_Internal$attribute(
+													A2(_elm_lang$html$Html_Events$on, 'scroll', _p28));
+											}(
+												A2(
+													_elm_lang$core$Json_Decode$map,
+													function (_p29) {
+														return lift(
+															A2(_debois$elm_mdl$Material_Layout$ScrollPane, config.fixedHeader, _p29));
+													},
+													_debois$elm_dom$DOM$target(_debois$elm_dom$DOM$scrollTop))),
+											_debois$elm_mdl$Material_Layout$isWaterfall(config.mode))
+										]),
+									_p24.main)))
+						]))
+				]));
+	});
+var _debois$elm_mdl$Material_Layout$render = A4(
+	_debois$elm_parts$Parts$create1,
+	_debois$elm_mdl$Material_Layout$view,
+	_debois$elm_mdl$Material_Layout$update$,
+	function (_) {
+		return _.layout;
+	},
+	F2(
+		function (x, c) {
+			return _elm_lang$core$Native_Utils.update(
+				c,
+				{layout: x});
+		}));
+
+var _debois$elm_mdl$Material_Toggles$group = function (s) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{
+					group: _elm_lang$core$Maybe$Just(
+						_elm_lang$html$Html_Attributes$name(s))
+				});
+		});
+};
+var _debois$elm_mdl$Material_Toggles$value = function (b) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{value: b});
+		});
+};
+var _debois$elm_mdl$Material_Toggles$disabled = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{isDisabled: true});
+	});
+var _debois$elm_mdl$Material_Toggles$ripple = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{ripple: true});
+	});
+var _debois$elm_mdl$Material_Toggles$onClick = function (x) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{
+					onClick: _elm_lang$core$Maybe$Just(
+						A2(
+							_elm_lang$html$Html_Events$on,
+							'change',
+							_elm_lang$core$Json_Decode$succeed(x)))
+				});
+		});
+};
+var _debois$elm_mdl$Material_Toggles$defaultConfig = {
+	isDisabled: false,
+	value: false,
+	ripple: false,
+	group: _elm_lang$core$Maybe$Nothing,
+	onClick: _elm_lang$core$Maybe$Nothing,
+	inner: _elm_lang$core$Native_List.fromArray(
+		[])
+};
+var _debois$elm_mdl$Material_Toggles$defaultModel = {ripple: _debois$elm_mdl$Material_Ripple$model, isFocused: false};
+var _debois$elm_mdl$Material_Toggles$Model = F2(
+	function (a, b) {
+		return {ripple: a, isFocused: b};
+	});
+var _debois$elm_mdl$Material_Toggles$Config = F6(
+	function (a, b, c, d, e, f) {
+		return {isDisabled: a, value: b, ripple: c, group: d, onClick: e, inner: f};
+	});
+var _debois$elm_mdl$Material_Toggles$SetFocus = function (a) {
+	return {ctor: 'SetFocus', _0: a};
+};
+var _debois$elm_mdl$Material_Toggles$Ripple = function (a) {
+	return {ctor: 'Ripple', _0: a};
+};
+var _debois$elm_mdl$Material_Toggles$update = F2(
+	function (action, model) {
+		var _p0 = action;
+		if (_p0.ctor === 'Ripple') {
+			return A2(
+				_debois$elm_mdl$Material_Helpers$map2nd,
+				_elm_lang$core$Platform_Cmd$map(_debois$elm_mdl$Material_Toggles$Ripple),
+				A2(
+					_debois$elm_mdl$Material_Helpers$map1st,
+					function (r) {
+						return _elm_lang$core$Native_Utils.update(
+							model,
+							{ripple: r});
+					},
+					A2(_debois$elm_mdl$Material_Ripple$update, _p0._0, model.ripple)));
+		} else {
+			return {
+				ctor: '_Tuple2',
+				_0: _elm_lang$core$Native_Utils.update(
+					model,
+					{isFocused: _p0._0}),
+				_1: _elm_lang$core$Platform_Cmd$none
+			};
+		}
+	});
+var _debois$elm_mdl$Material_Toggles$render = function (view) {
+	return A5(
+		_debois$elm_parts$Parts$create,
+		view,
+		_debois$elm_parts$Parts$generalize(_debois$elm_mdl$Material_Toggles$update),
+		function (_) {
+			return _.toggles;
+		},
+		F2(
+			function (x, y) {
+				return _elm_lang$core$Native_Utils.update(
+					y,
+					{toggles: x});
+			}),
+		_debois$elm_mdl$Material_Toggles$defaultModel);
+};
+var _debois$elm_mdl$Material_Toggles$top = F5(
+	function (lift, group, model, summary, elems) {
+		var cfg = summary.config;
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$label,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs(
+					A2(_elm_lang$core$Basics_ops['++'], 'mdl-', group)),
+					_debois$elm_mdl$Material_Options$cs(
+					A2(_elm_lang$core$Basics_ops['++'], 'mdl-js-', group)),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect'),
+					cfg.ripple),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect--ignore-events'),
+					cfg.ripple),
+					_debois$elm_mdl$Material_Options$cs('is-upgraded'),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('is-checked'),
+					cfg.value),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('is-focused'),
+					model.isFocused)
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Helpers$blurOn('mouseup'),
+					_elm_lang$html$Html_Events$onFocus(
+					lift(
+						_debois$elm_mdl$Material_Toggles$SetFocus(true))),
+					_elm_lang$html$Html_Events$onBlur(
+					lift(
+						_debois$elm_mdl$Material_Toggles$SetFocus(false))),
+					A2(_elm_lang$core$Maybe$withDefault, _debois$elm_mdl$Material_Helpers$noAttr, cfg.onClick)
+				]),
+			_elm_lang$core$List$concat(
+				_elm_lang$core$Native_List.fromArray(
+					[
+						elems,
+						cfg.ripple ? _elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_elm_lang$html$Html_App$map,
+							function (_p1) {
+								return lift(
+									_debois$elm_mdl$Material_Toggles$Ripple(_p1));
+							},
+							A2(
+								_debois$elm_mdl$Material_Ripple$view,
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$html$Html_Attributes$class('mdl-switch__ripple-container mdl-js-ripple-effect mdl-ripple--center')
+									]),
+								model.ripple))
+						]) : _elm_lang$core$Native_List.fromArray(
+						[])
+					])));
+	});
+var _debois$elm_mdl$Material_Toggles$viewCheckbox = F4(
+	function (lift, model, config, elems) {
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Toggles$defaultConfig, config);
+		var cfg = summary.config;
+		return A5(
+			_debois$elm_mdl$Material_Toggles$top,
+			lift,
+			'checkbox',
+			model,
+			summary,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A4(
+					_debois$elm_mdl$Material_Options$styled$,
+					_elm_lang$html$Html$input,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-checkbox__input'),
+							_debois$elm_mdl$Material_Options$many(cfg.inner)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$type$('checkbox'),
+							_elm_lang$html$Html_Attributes$disabled(cfg.isDisabled),
+							_elm_lang$html$Html_Attributes$checked(cfg.value)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-checkbox__label')
+						]),
+					elems),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-checkbox__focus-helper')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-checkbox__box-outline')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_elm_lang$html$Html$span,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$html$Html_Attributes$class('mdl-checkbox__tick-outline')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[]))
+						]))
+				]));
+	});
+var _debois$elm_mdl$Material_Toggles$checkbox = _debois$elm_mdl$Material_Toggles$render(_debois$elm_mdl$Material_Toggles$viewCheckbox);
+var _debois$elm_mdl$Material_Toggles$viewSwitch = F4(
+	function (lift, model, config, elems) {
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Toggles$defaultConfig, config);
+		var cfg = summary.config;
+		return A5(
+			_debois$elm_mdl$Material_Toggles$top,
+			lift,
+			'switch',
+			model,
+			summary,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A4(
+					_debois$elm_mdl$Material_Options$styled$,
+					_elm_lang$html$Html$input,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-switch__input'),
+							_debois$elm_mdl$Material_Options$many(cfg.inner)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$type$('checkbox'),
+							_elm_lang$html$Html_Attributes$disabled(cfg.isDisabled),
+							_elm_lang$html$Html_Attributes$checked(cfg.value)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-switch__label')
+						]),
+					elems),
+					A2(
+					_elm_lang$html$Html$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-switch__track')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-switch__thumb')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_elm_lang$html$Html$span,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$html$Html_Attributes$class('mdl-switch__focus-helper')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[]))
+						]))
+				]));
+	});
+var _debois$elm_mdl$Material_Toggles$switch = _debois$elm_mdl$Material_Toggles$render(_debois$elm_mdl$Material_Toggles$viewSwitch);
+var _debois$elm_mdl$Material_Toggles$viewRadio = F4(
+	function (lift, model, config, elems) {
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Toggles$defaultConfig, config);
+		var cfg = summary.config;
+		return A5(
+			_debois$elm_mdl$Material_Toggles$top,
+			lift,
+			'radio',
+			model,
+			summary,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A4(
+					_debois$elm_mdl$Material_Options$styled$,
+					_elm_lang$html$Html$input,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('mdl-radio__button'),
+							_debois$elm_mdl$Material_Options$many(cfg.inner)
+						]),
+					A2(
+						_elm_lang$core$List$filterMap,
+						_elm_lang$core$Basics$identity,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$core$Maybe$Just(
+								_elm_lang$html$Html_Attributes$type$('radio')),
+								_elm_lang$core$Maybe$Just(
+								_elm_lang$html$Html_Attributes$disabled(cfg.isDisabled)),
+								_elm_lang$core$Maybe$Just(
+								_elm_lang$html$Html_Attributes$checked(cfg.value)),
+								cfg.group
+							])),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-radio__label')
+						]),
+					elems),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-radio__outer-circle')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_elm_lang$html$Html$span,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$class('mdl-radio__inner-circle')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[]))
+				]));
+	});
+var _debois$elm_mdl$Material_Toggles$radio = _debois$elm_mdl$Material_Toggles$render(_debois$elm_mdl$Material_Toggles$viewRadio);
+
+var _debois$elm_mdl$Material_Tooltip$set = F2(
+	function (x, y) {
+		return _elm_lang$core$Native_Utils.update(
+			y,
+			{tooltip: x});
+	});
+var _debois$elm_mdl$Material_Tooltip$container = function (elem) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{container: elem});
+		});
+};
+var _debois$elm_mdl$Material_Tooltip$isTooltipClass = function (path) {
+	return A2(
+		_elm_lang$core$Json_Decode$andThen,
+		A2(_elm_lang$core$Json_Decode$at, path, _debois$elm_dom$DOM$className),
+		function ($class) {
+			return A2(_elm_lang$core$String$contains, 'mdl-tooltip', $class) ? _elm_lang$core$Json_Decode$succeed(true) : _elm_lang$core$Json_Decode$succeed(false);
+		});
+};
+var _debois$elm_mdl$Material_Tooltip$sibling = function (d) {
+	var valid = function (path) {
+		return A2(
+			_elm_lang$core$Json_Decode$andThen,
+			_debois$elm_mdl$Material_Tooltip$isTooltipClass(path),
+			function (res) {
+				return res ? A2(_elm_lang$core$Json_Decode$at, path, d) : _elm_lang$core$Json_Decode$fail('');
+			});
+	};
+	var createPath = function (depth) {
+		var parents = A2(_elm_lang$core$List$repeat, depth, 'parentElement');
+		return A2(
+			_elm_lang$core$Basics_ops['++'],
+			_elm_lang$core$Native_List.fromArray(
+				['target']),
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				parents,
+				_elm_lang$core$Native_List.fromArray(
+					['nextSibling'])));
+	};
+	var paths = A2(
+		_elm_lang$core$List$map,
+		createPath,
+		_elm_lang$core$Native_List.range(0, 4));
+	return _elm_lang$core$Json_Decode$oneOf(
+		A2(_elm_lang$core$List$map, valid, paths));
+};
+var _debois$elm_mdl$Material_Tooltip$update = F2(
+	function (action, model) {
+		var _p0 = action;
+		if (_p0.ctor === 'Enter') {
+			return {
+				ctor: '_Tuple2',
+				_0: _elm_lang$core$Native_Utils.update(
+					model,
+					{isActive: true, domState: _p0._0}),
+				_1: _elm_lang$core$Platform_Cmd$none
+			};
+		} else {
+			return {
+				ctor: '_Tuple2',
+				_0: _elm_lang$core$Native_Utils.update(
+					model,
+					{isActive: false}),
+				_1: _elm_lang$core$Platform_Cmd$none
+			};
+		}
+	});
+var _debois$elm_mdl$Material_Tooltip$calculatePos = F2(
+	function (pos, domState) {
+		var getValuesFor = F2(
+			function (l, r) {
+				return (_elm_lang$core$Native_Utils.cmp(l + r, 0) < 0) ? {ctor: '_Tuple2', _0: 0, _1: 0} : {ctor: '_Tuple2', _0: l, _1: r};
+			});
+		var offsetHeight = domState.offsetHeight;
+		var marginTop = -1 * (offsetHeight / 2);
+		var offsetWidth = domState.offsetWidth;
+		var marginLeft = -1 * (offsetWidth / 2);
+		var props = domState.rect;
+		var left = props.left + (props.width / 2);
+		var _p1 = A2(getValuesFor, left, marginLeft);
+		var newLeft = _p1._0;
+		var newMarginLeft = _p1._1;
+		var top = props.top + (props.height / 2);
+		var _p2 = A2(getValuesFor, top, marginTop);
+		var newTop = _p2._0;
+		var newMarginTop = _p2._1;
+		var out = function () {
+			var _p3 = pos;
+			switch (_p3.ctor) {
+				case 'Left':
+					return {left: (props.left - offsetWidth) - 10, top: newTop, marginTop: newMarginTop, marginLeft: 0};
+				case 'Right':
+					return {left: (props.left + props.width) + 10, top: newTop, marginTop: newMarginTop, marginLeft: 0};
+				case 'Top':
+					return {left: newLeft, top: (props.top - offsetHeight) - 10, marginTop: 0, marginLeft: newMarginLeft};
+				default:
+					return {left: newLeft, top: (props.top + props.height) + 10, marginTop: 0, marginLeft: newMarginLeft};
+			}
+		}();
+		return out;
+	});
+var _debois$elm_mdl$Material_Tooltip$defaultDOMState = {
+	rect: {left: 0, top: 0, width: 0, height: 0},
+	offsetWidth: 0,
+	offsetHeight: 0
+};
+var _debois$elm_mdl$Material_Tooltip$defaultPos = {left: 0, top: 0, marginLeft: 0, marginTop: 0};
+var _debois$elm_mdl$Material_Tooltip$defaultModel = {isActive: false, domState: _debois$elm_mdl$Material_Tooltip$defaultDOMState};
+var _debois$elm_mdl$Material_Tooltip$pack = A4(
+	_debois$elm_parts$Parts$pack,
+	_debois$elm_parts$Parts$generalize(_debois$elm_mdl$Material_Tooltip$update),
+	function (_) {
+		return _.tooltip;
+	},
+	_debois$elm_mdl$Material_Tooltip$set,
+	_debois$elm_mdl$Material_Tooltip$defaultModel);
+var _debois$elm_mdl$Material_Tooltip$Model = F2(
+	function (a, b) {
+		return {isActive: a, domState: b};
+	});
+var _debois$elm_mdl$Material_Tooltip$Pos = F4(
+	function (a, b, c, d) {
+		return {left: a, top: b, marginLeft: c, marginTop: d};
+	});
+var _debois$elm_mdl$Material_Tooltip$DOMState = F3(
+	function (a, b, c) {
+		return {rect: a, offsetWidth: b, offsetHeight: c};
+	});
+var _debois$elm_mdl$Material_Tooltip$stateDecoder = A4(
+	_elm_lang$core$Json_Decode$object3,
+	_debois$elm_mdl$Material_Tooltip$DOMState,
+	_debois$elm_dom$DOM$target(_debois$elm_dom$DOM$boundingClientRect),
+	_debois$elm_mdl$Material_Tooltip$sibling(_debois$elm_dom$DOM$offsetWidth),
+	_debois$elm_mdl$Material_Tooltip$sibling(_debois$elm_dom$DOM$offsetHeight));
+var _debois$elm_mdl$Material_Tooltip$Config = F3(
+	function (a, b, c) {
+		return {size: a, position: b, container: c};
+	});
+var _debois$elm_mdl$Material_Tooltip$Leave = {ctor: 'Leave'};
+var _debois$elm_mdl$Material_Tooltip$onMouseLeave = F2(
+	function (lift, idx) {
+		return A2(
+			_elm_lang$html$Html_Events$on,
+			'mouseleave',
+			_elm_lang$core$Json_Decode$succeed(
+				A3(_debois$elm_mdl$Material_Tooltip$pack, lift, idx, _debois$elm_mdl$Material_Tooltip$Leave)));
+	});
+var _debois$elm_mdl$Material_Tooltip$onLeave = function (lift) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseleave',
+		_elm_lang$core$Json_Decode$succeed(
+			lift(_debois$elm_mdl$Material_Tooltip$Leave)));
+};
+var _debois$elm_mdl$Material_Tooltip$Enter = function (a) {
+	return {ctor: 'Enter', _0: a};
+};
+var _debois$elm_mdl$Material_Tooltip$onMouseEnter = F2(
+	function (lift, idx) {
+		return A2(
+			_elm_lang$html$Html_Events$on,
+			'mouseenter',
+			A2(
+				_elm_lang$core$Json_Decode$map,
+				function (_p4) {
+					return A3(
+						_debois$elm_mdl$Material_Tooltip$pack,
+						lift,
+						idx,
+						_debois$elm_mdl$Material_Tooltip$Enter(_p4));
+				},
+				_debois$elm_mdl$Material_Tooltip$stateDecoder));
+	});
+var _debois$elm_mdl$Material_Tooltip$attach = F2(
+	function (lift, index) {
+		return _debois$elm_mdl$Material_Options$many(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options_Internal$attribute(
+					A2(_debois$elm_mdl$Material_Tooltip$onMouseEnter, lift, index)),
+					_debois$elm_mdl$Material_Options_Internal$attribute(
+					A2(_debois$elm_mdl$Material_Tooltip$onMouseLeave, lift, index))
+				]));
+	});
+var _debois$elm_mdl$Material_Tooltip$onEnter = function (lift) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseenter',
+		A2(
+			_elm_lang$core$Json_Decode$map,
+			function (_p5) {
+				return lift(
+					_debois$elm_mdl$Material_Tooltip$Enter(_p5));
+			},
+			_debois$elm_mdl$Material_Tooltip$stateDecoder));
+};
+var _debois$elm_mdl$Material_Tooltip$Large = {ctor: 'Large'};
+var _debois$elm_mdl$Material_Tooltip$large = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{size: _debois$elm_mdl$Material_Tooltip$Large});
+	});
+var _debois$elm_mdl$Material_Tooltip$Default = {ctor: 'Default'};
+var _debois$elm_mdl$Material_Tooltip$Bottom = {ctor: 'Bottom'};
+var _debois$elm_mdl$Material_Tooltip$defaultConfig = {size: _debois$elm_mdl$Material_Tooltip$Default, position: _debois$elm_mdl$Material_Tooltip$Bottom, container: _elm_lang$html$Html$div};
+var _debois$elm_mdl$Material_Tooltip$view = F4(
+	function (lift, model, options, content) {
+		var px = function (f) {
+			return A2(
+				_elm_lang$core$Basics_ops['++'],
+				_elm_lang$core$Basics$toString(f),
+				'px');
+		};
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Tooltip$defaultConfig, options);
+		var config = summary.config;
+		var pos = model.isActive ? A2(_debois$elm_mdl$Material_Tooltip$calculatePos, config.position, model.domState) : _debois$elm_mdl$Material_Tooltip$defaultPos;
+		return A3(
+			_debois$elm_mdl$Material_Options$styled,
+			config.container,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-tooltip'),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('is-active'),
+					model.isActive),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-tooltip--large'),
+					_elm_lang$core$Native_Utils.eq(config.size, _debois$elm_mdl$Material_Tooltip$Large)),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					A2(
+						_debois$elm_mdl$Material_Options$css,
+						'left',
+						px(pos.left)),
+					model.isActive),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					A2(
+						_debois$elm_mdl$Material_Options$css,
+						'margin-left',
+						px(pos.marginLeft)),
+					model.isActive),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					A2(
+						_debois$elm_mdl$Material_Options$css,
+						'top',
+						px(pos.top)),
+					model.isActive),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					A2(
+						_debois$elm_mdl$Material_Options$css,
+						'margin-top',
+						px(pos.marginTop)),
+					model.isActive)
+				]),
+			content);
+	});
+var _debois$elm_mdl$Material_Tooltip$render = A5(
+	_debois$elm_parts$Parts$create,
+	_debois$elm_mdl$Material_Tooltip$view,
+	_debois$elm_parts$Parts$generalize(_debois$elm_mdl$Material_Tooltip$update),
+	function (_) {
+		return _.tooltip;
+	},
+	F2(
+		function (x, y) {
+			return _elm_lang$core$Native_Utils.update(
+				y,
+				{tooltip: x});
+		}),
+	_debois$elm_mdl$Material_Tooltip$defaultModel);
+var _debois$elm_mdl$Material_Tooltip$bottom = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{position: _debois$elm_mdl$Material_Tooltip$Bottom});
+	});
+var _debois$elm_mdl$Material_Tooltip$Top = {ctor: 'Top'};
+var _debois$elm_mdl$Material_Tooltip$top = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{position: _debois$elm_mdl$Material_Tooltip$Top});
+	});
+var _debois$elm_mdl$Material_Tooltip$Right = {ctor: 'Right'};
+var _debois$elm_mdl$Material_Tooltip$right = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{position: _debois$elm_mdl$Material_Tooltip$Right});
+	});
+var _debois$elm_mdl$Material_Tooltip$Left = {ctor: 'Left'};
+var _debois$elm_mdl$Material_Tooltip$left = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{position: _debois$elm_mdl$Material_Tooltip$Left});
+	});
+
+var _debois$elm_mdl$Material_Tabs$activeTab = function (k) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{activeTab: k});
+		});
+};
+var _debois$elm_mdl$Material_Tabs$onSelectTab = function (k) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (config) {
+			return _elm_lang$core$Native_Utils.update(
+				config,
+				{
+					onSelectTab: _elm_lang$core$Maybe$Just(k)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Tabs$ripple = _debois$elm_mdl$Material_Options$set(
+	function (options) {
+		return _elm_lang$core$Native_Utils.update(
+			options,
+			{ripple: true});
+	});
+var _debois$elm_mdl$Material_Tabs$defaultConfig = {ripple: false, onSelectTab: _elm_lang$core$Maybe$Nothing, activeTab: 0};
+var _debois$elm_mdl$Material_Tabs$defaultModel = {ripples: _elm_lang$core$Dict$empty};
+var _debois$elm_mdl$Material_Tabs$Model = function (a) {
+	return {ripples: a};
+};
+var _debois$elm_mdl$Material_Tabs$Config = F3(
+	function (a, b, c) {
+		return {ripple: a, onSelectTab: b, activeTab: c};
+	});
+var _debois$elm_mdl$Material_Tabs$Ripple = F2(
+	function (a, b) {
+		return {ctor: 'Ripple', _0: a, _1: b};
+	});
+var _debois$elm_mdl$Material_Tabs$update = F2(
+	function (action, model) {
+		var _p0 = action;
+		var _p2 = _p0._0;
+		var _p1 = A2(
+			_debois$elm_mdl$Material_Ripple$update,
+			_p0._1,
+			A2(
+				_elm_lang$core$Maybe$withDefault,
+				_debois$elm_mdl$Material_Ripple$model,
+				A2(_elm_lang$core$Dict$get, _p2, model.ripples)));
+		var ripple$ = _p1._0;
+		var cmd = _p1._1;
+		return {
+			ctor: '_Tuple2',
+			_0: _elm_lang$core$Native_Utils.update(
+				model,
+				{
+					ripples: A3(_elm_lang$core$Dict$insert, _p2, ripple$, model.ripples)
+				}),
+			_1: A2(
+				_elm_lang$core$Platform_Cmd$map,
+				_debois$elm_mdl$Material_Tabs$Ripple(_p2),
+				cmd)
+		};
+	});
+var _debois$elm_mdl$Material_Tabs$view = F5(
+	function (lift, model, options, tabs, tabContent) {
+		var wrapContent = A2(
+			_elm_lang$html$Html_Keyed$node,
+			'div',
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html_Attributes$classList(
+					_elm_lang$core$Native_List.fromArray(
+						[
+							{ctor: '_Tuple2', _0: 'mdl-tab__panel', _1: true},
+							{ctor: '_Tuple2', _0: 'is-active', _1: true}
+						]))
+				]));
+		var summary = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Tabs$defaultConfig, options);
+		var config = summary.config;
+		var unwrapLabel = F2(
+			function (tabIdx, _p3) {
+				var _p4 = _p3;
+				var _p6 = _p4._0._1;
+				return A3(
+					_debois$elm_mdl$Material_Options$styled,
+					_elm_lang$html$Html$a,
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_debois$elm_mdl$Material_Options$cs('mdl-tabs__tab'),
+								A2(
+								_debois$elm_mdl$Material_Options$when,
+								_debois$elm_mdl$Material_Options$cs('is-active'),
+								_elm_lang$core$Native_Utils.eq(tabIdx, config.activeTab)),
+								A2(
+								_elm_lang$core$Maybe$withDefault,
+								_debois$elm_mdl$Material_Options$nop,
+								A2(
+									_elm_lang$core$Maybe$map,
+									function (t) {
+										return _debois$elm_mdl$Material_Options_Internal$attribute(
+											_elm_lang$html$Html_Events$onClick(
+												t(tabIdx)));
+									},
+									config.onSelectTab))
+							]),
+						_p4._0._0),
+					config.ripple ? _elm_lang$core$List$concat(
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_p6,
+								_elm_lang$core$Native_List.fromArray(
+								[
+									A2(
+									_elm_lang$html$Html_App$map,
+									function (_p5) {
+										return lift(
+											A2(_debois$elm_mdl$Material_Tabs$Ripple, tabIdx, _p5));
+									},
+									A2(
+										_debois$elm_mdl$Material_Ripple$view,
+										_elm_lang$core$Native_List.fromArray(
+											[
+												_elm_lang$html$Html_Attributes$classList(
+												_elm_lang$core$Native_List.fromArray(
+													[
+														{ctor: '_Tuple2', _0: 'mdl-tabs__ripple-container', _1: true},
+														{ctor: '_Tuple2', _0: 'mdl-tabs__ripple-js-effect', _1: true}
+													]))
+											]),
+										A2(
+											_elm_lang$core$Maybe$withDefault,
+											_debois$elm_mdl$Material_Ripple$model,
+											A2(_elm_lang$core$Dict$get, tabIdx, model.ripples))))
+								])
+							])) : _p6);
+			});
+		var links = A3(
+			_debois$elm_mdl$Material_Options$styled,
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-tabs__tab-bar')
+				]),
+			A2(_elm_lang$core$List$indexedMap, unwrapLabel, tabs));
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-tabs'),
+					_debois$elm_mdl$Material_Options$cs('mdl-js-tabs'),
+					_debois$elm_mdl$Material_Options$cs('is-upgraded'),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect'),
+					config.ripple),
+					A2(
+					_debois$elm_mdl$Material_Options$when,
+					_debois$elm_mdl$Material_Options$cs('mdl-js-ripple-effect--ignore-events'),
+					config.ripple)
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					links,
+					wrapContent(
+					_elm_lang$core$Native_List.fromArray(
+						[
+							{
+							ctor: '_Tuple2',
+							_0: _elm_lang$core$Basics$toString(config.activeTab),
+							_1: A2(
+								_elm_lang$html$Html$div,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								tabContent)
+						}
+						]))
+				]));
+	});
+var _debois$elm_mdl$Material_Tabs$render = A5(
+	_debois$elm_parts$Parts$create,
+	_debois$elm_mdl$Material_Tabs$view,
+	_debois$elm_parts$Parts$generalize(_debois$elm_mdl$Material_Tabs$update),
+	function (_) {
+		return _.tabs;
+	},
+	F2(
+		function (x, y) {
+			return _elm_lang$core$Native_Utils.update(
+				y,
+				{tabs: x});
+		}),
+	_debois$elm_mdl$Material_Tabs$defaultModel);
+var _debois$elm_mdl$Material_Tabs$Label = function (a) {
+	return {ctor: 'Label', _0: a};
+};
+var _debois$elm_mdl$Material_Tabs$label = F2(
+	function (p, c) {
+		return _debois$elm_mdl$Material_Tabs$Label(
+			{ctor: '_Tuple2', _0: p, _1: c});
+	});
+var _debois$elm_mdl$Material_Tabs$textLabel = F2(
+	function (p, c) {
+		return A2(
+			_debois$elm_mdl$Material_Tabs$label,
+			p,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(c)
+				]));
+	});
+
+var _debois$elm_mdl$Material$init = function (lift) {
+	return _debois$elm_mdl$Material_Layout$sub0(lift);
+};
+var _debois$elm_mdl$Material$subscriptions = F2(
+	function (lift, model) {
+		return _elm_lang$core$Platform_Sub$batch(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(_debois$elm_mdl$Material_Layout$subs, lift, model.mdl),
+					A2(_debois$elm_mdl$Material_Menu$subs, lift, model.mdl)
+				]));
+	});
+var _debois$elm_mdl$Material$update = F2(
+	function (msg, model) {
+		return A2(
+			_elm_lang$core$Maybe$withDefault,
+			{ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none},
+			A2(
+				_elm_lang$core$Maybe$map,
+				_debois$elm_mdl$Material_Helpers$map1st(
+					function (mdl) {
+						return _elm_lang$core$Native_Utils.update(
+							model,
+							{mdl: mdl});
+					}),
+				A2(_debois$elm_parts$Parts$update$, msg, model.mdl)));
+	});
+var _debois$elm_mdl$Material$model = {button: _elm_lang$core$Dict$empty, textfield: _elm_lang$core$Dict$empty, menu: _elm_lang$core$Dict$empty, snackbar: _elm_lang$core$Maybe$Nothing, layout: _debois$elm_mdl$Material_Layout$defaultModel, toggles: _elm_lang$core$Dict$empty, tooltip: _elm_lang$core$Dict$empty, tabs: _elm_lang$core$Dict$empty};
+var _debois$elm_mdl$Material$Model = F8(
+	function (a, b, c, d, e, f, g, h) {
+		return {button: a, textfield: b, menu: c, snackbar: d, layout: e, toggles: f, tooltip: g, tabs: h};
+	});
+
+var _debois$elm_mdl$Material_Color$text = function (_p0) {
+	var _p1 = _p0;
+	return _debois$elm_mdl$Material_Options$cs(
+		A2(_elm_lang$core$Basics_ops['++'], 'mdl-color-text--', _p1._0));
+};
+var _debois$elm_mdl$Material_Color$background = function (_p2) {
+	var _p3 = _p2;
+	return _debois$elm_mdl$Material_Options$cs(
+		A2(_elm_lang$core$Basics_ops['++'], 'mdl-color--', _p3._0));
+};
+var _debois$elm_mdl$Material_Color$shadeName = function (shade) {
+	var _p4 = shade;
+	switch (_p4.ctor) {
+		case 'S50':
+			return '50';
+		case 'S100':
+			return '100';
+		case 'S200':
+			return '200';
+		case 'S300':
+			return '300';
+		case 'S400':
+			return '400';
+		case 'S500':
+			return '500';
+		case 'S600':
+			return '600';
+		case 'S700':
+			return '700';
+		case 'S800':
+			return '800';
+		case 'S900':
+			return '900';
+		case 'A100':
+			return 'A100';
+		case 'A200':
+			return 'A200';
+		case 'A400':
+			return 'A400';
+		default:
+			return 'A700';
+	}
+};
+var _debois$elm_mdl$Material_Color$hueName = function (color) {
+	var _p5 = color;
+	switch (_p5.ctor) {
+		case 'Indigo':
+			return 'indigo';
+		case 'Blue':
+			return 'blue';
+		case 'LightBlue':
+			return 'light-blue';
+		case 'Cyan':
+			return 'cyan';
+		case 'Teal':
+			return 'teal';
+		case 'Green':
+			return 'green';
+		case 'LightGreen':
+			return 'light-green';
+		case 'Lime':
+			return 'lime';
+		case 'Yellow':
+			return 'yellow';
+		case 'Amber':
+			return 'amber';
+		case 'Orange':
+			return 'orange';
+		case 'Brown':
+			return 'brown';
+		case 'BlueGrey':
+			return 'blue-grey';
+		case 'Grey':
+			return 'grey';
+		case 'DeepOrange':
+			return 'deep-orange';
+		case 'Red':
+			return 'red';
+		case 'Pink':
+			return 'pink';
+		case 'Purple':
+			return 'purple';
+		default:
+			return 'deep-purple';
+	}
+};
+var _debois$elm_mdl$Material_Color$scheme = F2(
+	function (primary, accent) {
+		var q = _elm_lang$core$String$map(
+			function (x) {
+				return _elm_lang$core$Native_Utils.eq(
+					x,
+					_elm_lang$core$Native_Utils.chr('-')) ? _elm_lang$core$Native_Utils.chr('_') : x;
+			});
+		var cssFile = function () {
+			var _p6 = accent;
+			switch (_p6.ctor) {
+				case 'Grey':
+					return '';
+				case 'Brown':
+					return '';
+				case 'BlueGrey':
+					return '';
+				default:
+					return A2(
+						_elm_lang$core$Basics_ops['++'],
+						'.',
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							q(
+								_debois$elm_mdl$Material_Color$hueName(primary)),
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								'-',
+								q(
+									_debois$elm_mdl$Material_Color$hueName(accent)))));
+			}
+		}();
+		return A2(
+			_elm_lang$core$Basics_ops['++'],
+			'material',
+			A2(_elm_lang$core$Basics_ops['++'], cssFile, '.min.css'));
+	});
+var _debois$elm_mdl$Material_Color$DeepPurple = {ctor: 'DeepPurple'};
+var _debois$elm_mdl$Material_Color$Purple = {ctor: 'Purple'};
+var _debois$elm_mdl$Material_Color$Pink = {ctor: 'Pink'};
+var _debois$elm_mdl$Material_Color$Red = {ctor: 'Red'};
+var _debois$elm_mdl$Material_Color$DeepOrange = {ctor: 'DeepOrange'};
+var _debois$elm_mdl$Material_Color$Grey = {ctor: 'Grey'};
+var _debois$elm_mdl$Material_Color$BlueGrey = {ctor: 'BlueGrey'};
+var _debois$elm_mdl$Material_Color$Brown = {ctor: 'Brown'};
+var _debois$elm_mdl$Material_Color$Orange = {ctor: 'Orange'};
+var _debois$elm_mdl$Material_Color$Amber = {ctor: 'Amber'};
+var _debois$elm_mdl$Material_Color$Yellow = {ctor: 'Yellow'};
+var _debois$elm_mdl$Material_Color$Lime = {ctor: 'Lime'};
+var _debois$elm_mdl$Material_Color$LightGreen = {ctor: 'LightGreen'};
+var _debois$elm_mdl$Material_Color$Green = {ctor: 'Green'};
+var _debois$elm_mdl$Material_Color$Teal = {ctor: 'Teal'};
+var _debois$elm_mdl$Material_Color$Cyan = {ctor: 'Cyan'};
+var _debois$elm_mdl$Material_Color$LightBlue = {ctor: 'LightBlue'};
+var _debois$elm_mdl$Material_Color$Blue = {ctor: 'Blue'};
+var _debois$elm_mdl$Material_Color$Indigo = {ctor: 'Indigo'};
+var _debois$elm_mdl$Material_Color$hues = _elm_lang$core$Array$fromList(
+	_elm_lang$core$Native_List.fromArray(
+		[_debois$elm_mdl$Material_Color$Indigo, _debois$elm_mdl$Material_Color$Blue, _debois$elm_mdl$Material_Color$LightBlue, _debois$elm_mdl$Material_Color$Cyan, _debois$elm_mdl$Material_Color$Teal, _debois$elm_mdl$Material_Color$Green, _debois$elm_mdl$Material_Color$LightGreen, _debois$elm_mdl$Material_Color$Lime, _debois$elm_mdl$Material_Color$Yellow, _debois$elm_mdl$Material_Color$Amber, _debois$elm_mdl$Material_Color$Orange, _debois$elm_mdl$Material_Color$Brown, _debois$elm_mdl$Material_Color$BlueGrey, _debois$elm_mdl$Material_Color$Grey, _debois$elm_mdl$Material_Color$DeepOrange, _debois$elm_mdl$Material_Color$Red, _debois$elm_mdl$Material_Color$Pink, _debois$elm_mdl$Material_Color$Purple, _debois$elm_mdl$Material_Color$DeepPurple]));
+var _debois$elm_mdl$Material_Color$accentHues = _elm_lang$core$Array$fromList(
+	_elm_lang$core$Native_List.fromArray(
+		[_debois$elm_mdl$Material_Color$Indigo, _debois$elm_mdl$Material_Color$Blue, _debois$elm_mdl$Material_Color$LightBlue, _debois$elm_mdl$Material_Color$Cyan, _debois$elm_mdl$Material_Color$Teal, _debois$elm_mdl$Material_Color$Green, _debois$elm_mdl$Material_Color$LightGreen, _debois$elm_mdl$Material_Color$Lime, _debois$elm_mdl$Material_Color$Yellow, _debois$elm_mdl$Material_Color$Amber, _debois$elm_mdl$Material_Color$Orange, _debois$elm_mdl$Material_Color$DeepOrange, _debois$elm_mdl$Material_Color$Red, _debois$elm_mdl$Material_Color$Pink, _debois$elm_mdl$Material_Color$Purple, _debois$elm_mdl$Material_Color$DeepPurple]));
+var _debois$elm_mdl$Material_Color$A700 = {ctor: 'A700'};
+var _debois$elm_mdl$Material_Color$A400 = {ctor: 'A400'};
+var _debois$elm_mdl$Material_Color$A200 = {ctor: 'A200'};
+var _debois$elm_mdl$Material_Color$A100 = {ctor: 'A100'};
+var _debois$elm_mdl$Material_Color$S900 = {ctor: 'S900'};
+var _debois$elm_mdl$Material_Color$S800 = {ctor: 'S800'};
+var _debois$elm_mdl$Material_Color$S700 = {ctor: 'S700'};
+var _debois$elm_mdl$Material_Color$S600 = {ctor: 'S600'};
+var _debois$elm_mdl$Material_Color$S500 = {ctor: 'S500'};
+var _debois$elm_mdl$Material_Color$S400 = {ctor: 'S400'};
+var _debois$elm_mdl$Material_Color$S300 = {ctor: 'S300'};
+var _debois$elm_mdl$Material_Color$S200 = {ctor: 'S200'};
+var _debois$elm_mdl$Material_Color$S100 = {ctor: 'S100'};
+var _debois$elm_mdl$Material_Color$S50 = {ctor: 'S50'};
+var _debois$elm_mdl$Material_Color$shades = _elm_lang$core$Array$fromList(
+	_elm_lang$core$Native_List.fromArray(
+		[_debois$elm_mdl$Material_Color$S50, _debois$elm_mdl$Material_Color$S100, _debois$elm_mdl$Material_Color$S200, _debois$elm_mdl$Material_Color$S300, _debois$elm_mdl$Material_Color$S400, _debois$elm_mdl$Material_Color$S500, _debois$elm_mdl$Material_Color$S600, _debois$elm_mdl$Material_Color$S700, _debois$elm_mdl$Material_Color$S800, _debois$elm_mdl$Material_Color$S900, _debois$elm_mdl$Material_Color$A100, _debois$elm_mdl$Material_Color$A200, _debois$elm_mdl$Material_Color$A400, _debois$elm_mdl$Material_Color$A700]));
+var _debois$elm_mdl$Material_Color$C = function (a) {
+	return {ctor: 'C', _0: a};
+};
+var _debois$elm_mdl$Material_Color$color = F2(
+	function (hue, shade) {
+		return _debois$elm_mdl$Material_Color$C(
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				_debois$elm_mdl$Material_Color$hueName(hue),
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					'-',
+					_debois$elm_mdl$Material_Color$shadeName(shade))));
+	});
+var _debois$elm_mdl$Material_Color$white = _debois$elm_mdl$Material_Color$C('white');
+var _debois$elm_mdl$Material_Color$black = _debois$elm_mdl$Material_Color$C('black');
+var _debois$elm_mdl$Material_Color$primary = _debois$elm_mdl$Material_Color$C('primary');
+var _debois$elm_mdl$Material_Color$primaryDark = _debois$elm_mdl$Material_Color$C('primary-dark');
+var _debois$elm_mdl$Material_Color$primaryContrast = _debois$elm_mdl$Material_Color$C('primary-contrast');
+var _debois$elm_mdl$Material_Color$accent = _debois$elm_mdl$Material_Color$C('accent');
+var _debois$elm_mdl$Material_Color$accentContrast = _debois$elm_mdl$Material_Color$C('accent-contrast');
+
+var _debois$elm_mdl$Material_Grid$clip = F3(
+	function (lower, upper, k) {
+		return A2(
+			_elm_lang$core$Basics$max,
+			lower,
+			A2(_elm_lang$core$Basics$min, k, upper));
+	});
+var _debois$elm_mdl$Material_Grid$stretch = _debois$elm_mdl$Material_Options$cs('mdl-cell--stretch');
+var _debois$elm_mdl$Material_Grid$align = function (a) {
+	var _p0 = a;
+	switch (_p0.ctor) {
+		case 'Top':
+			return _debois$elm_mdl$Material_Options$cs('mdl-cell--top');
+		case 'Middle':
+			return _debois$elm_mdl$Material_Options$cs('mdl-cell--middle');
+		default:
+			return _debois$elm_mdl$Material_Options$cs('mdl-cell--bottom');
+	}
+};
+var _debois$elm_mdl$Material_Grid$suffix = function (device) {
+	var _p1 = device;
+	switch (_p1.ctor) {
+		case 'All':
+			return '';
+		case 'Desktop':
+			return '-desktop';
+		case 'Tablet':
+			return '-tablet';
+		default:
+			return '-phone';
+	}
+};
+var _debois$elm_mdl$Material_Grid$size = F2(
+	function (device, k) {
+		var c = function () {
+			var _p2 = device;
+			switch (_p2.ctor) {
+				case 'All':
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 12, k);
+				case 'Desktop':
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 12, k);
+				case 'Tablet':
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 8, k);
+				default:
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 4, k);
+			}
+		}();
+		return _debois$elm_mdl$Material_Options$cs(
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				'mdl-cell--',
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					_elm_lang$core$Basics$toString(c),
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'-col',
+						_debois$elm_mdl$Material_Grid$suffix(device)))));
+	});
+var _debois$elm_mdl$Material_Grid$offset = F2(
+	function (device, k) {
+		var c = function () {
+			var _p3 = device;
+			switch (_p3.ctor) {
+				case 'All':
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 11, k);
+				case 'Desktop':
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 11, k);
+				case 'Tablet':
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 7, k);
+				default:
+					return A3(_debois$elm_mdl$Material_Grid$clip, 1, 3, k);
+			}
+		}();
+		return _debois$elm_mdl$Material_Options$cs(
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				'mdl-cell--',
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					_elm_lang$core$Basics$toString(c),
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'-offset',
+						_debois$elm_mdl$Material_Grid$suffix(device)))));
+	});
+var _debois$elm_mdl$Material_Grid$hide = function (device) {
+	return _debois$elm_mdl$Material_Options$cs(
+		function () {
+			var _p4 = device;
+			if (_p4.ctor === 'All') {
+				return '';
+			} else {
+				return A2(
+					_elm_lang$core$Basics_ops['++'],
+					'mdl-cell--hide-',
+					_debois$elm_mdl$Material_Grid$suffix(device));
+			}
+		}());
+};
+var _debois$elm_mdl$Material_Grid$order = F2(
+	function (device, n) {
+		return _debois$elm_mdl$Material_Options$cs(
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				'mdl-cell--order-',
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					_elm_lang$core$Basics$toString(
+						A3(_debois$elm_mdl$Material_Grid$clip, 1, 12, n)),
+					_debois$elm_mdl$Material_Grid$suffix(device))));
+	});
+var _debois$elm_mdl$Material_Grid$grid = F2(
+	function (styling, cells) {
+		return A2(
+			_debois$elm_mdl$Material_Options$div,
+			A2(
+				_elm_lang$core$List_ops['::'],
+				_debois$elm_mdl$Material_Options$cs('mdl-grid'),
+				styling),
+			A2(
+				_elm_lang$core$List$map,
+				function (_p5) {
+					var _p6 = _p5;
+					return _p6._0;
+				},
+				cells));
+	});
+var _debois$elm_mdl$Material_Grid$maxWidth = function (w) {
+	return A2(_debois$elm_mdl$Material_Options$css, 'max-width', w);
+};
+var _debois$elm_mdl$Material_Grid$noSpacing = _debois$elm_mdl$Material_Options$cs('mdl-grid--no-spacing');
+var _debois$elm_mdl$Material_Grid$Phone = {ctor: 'Phone'};
+var _debois$elm_mdl$Material_Grid$Tablet = {ctor: 'Tablet'};
+var _debois$elm_mdl$Material_Grid$Desktop = {ctor: 'Desktop'};
+var _debois$elm_mdl$Material_Grid$All = {ctor: 'All'};
+var _debois$elm_mdl$Material_Grid$Cell = function (a) {
+	return {ctor: 'Cell', _0: a};
+};
+var _debois$elm_mdl$Material_Grid$cell = F2(
+	function (styling, elms) {
+		return _debois$elm_mdl$Material_Grid$Cell(
+			A2(
+				_debois$elm_mdl$Material_Options$div,
+				A2(
+					_elm_lang$core$List_ops['::'],
+					_debois$elm_mdl$Material_Options$cs('mdl-cell'),
+					styling),
+				elms));
+	});
+var _debois$elm_mdl$Material_Grid$Bottom = {ctor: 'Bottom'};
+var _debois$elm_mdl$Material_Grid$Middle = {ctor: 'Middle'};
+var _debois$elm_mdl$Material_Grid$Top = {ctor: 'Top'};
+
+var _debois$elm_mdl$Material_Progress$percentage = function (p) {
+	return A2(
+		_elm_lang$core$Basics_ops['++'],
+		_elm_lang$core$Basics$toString(p),
+		'%');
+};
+var _debois$elm_mdl$Material_Progress$bar = F4(
+	function (indeterminate, buffered, p, b) {
+		return A2(
+			_debois$elm_mdl$Material_Options$div,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-progress mdl-js-progress is-upgraded'),
+					indeterminate ? _debois$elm_mdl$Material_Options$cs('mdl-progress__indeterminate') : _debois$elm_mdl$Material_Options$nop
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_debois$elm_mdl$Material_Options$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('progressbar bar bar1'),
+							A2(
+							_debois$elm_mdl$Material_Options$css,
+							'width',
+							_debois$elm_mdl$Material_Progress$percentage(p))
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_debois$elm_mdl$Material_Options$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('bufferbar bar bar2'),
+							A2(
+							_debois$elm_mdl$Material_Options$css,
+							'width',
+							_debois$elm_mdl$Material_Progress$percentage(b))
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(
+					_debois$elm_mdl$Material_Options$div,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_debois$elm_mdl$Material_Options$cs('auxbar bar bar3'),
+							A2(
+							_debois$elm_mdl$Material_Options$css,
+							'width',
+							_debois$elm_mdl$Material_Progress$percentage(
+								buffered ? (100 - b) : 0))
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[]))
+				]));
+	});
+var _debois$elm_mdl$Material_Progress$buffered = F2(
+	function (p, b) {
+		return A4(_debois$elm_mdl$Material_Progress$bar, false, true, p, b);
+	});
+var _debois$elm_mdl$Material_Progress$progress = function (p) {
+	return A4(_debois$elm_mdl$Material_Progress$bar, false, false, p, 100);
+};
+var _debois$elm_mdl$Material_Progress$indeterminate = A4(_debois$elm_mdl$Material_Progress$bar, true, false, 0, 100);
+
+var _debois$elm_mdl$Material_Scheme$scheme = F2(
+	function (primary, accent) {
+		return A2(
+			_elm_lang$core$String$join,
+			'\n',
+			A2(
+				_elm_lang$core$List$map,
+				function (url) {
+					return A2(
+						_elm_lang$core$Basics_ops['++'],
+						'@import url(',
+						A2(_elm_lang$core$Basics_ops['++'], url, ');'));
+				},
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_elm_lang$core$Basics_ops['++'],
+						'https://code.getmdl.io/1.2.0/',
+						A2(_debois$elm_mdl$Material_Color$scheme, primary, accent)),
+						'https://fonts.googleapis.com/icon?family=Material+Icons',
+						'https://fonts.googleapis.com/css?family=Roboto:400,300,500|Roboto+Mono|Roboto+Condensed:400,700&subset=latin,latin-ext'
+					])));
+	});
+var _debois$elm_mdl$Material_Scheme$topWithScheme = F3(
+	function (primary, accent, content) {
+		return A2(
+			_elm_lang$html$Html$div,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A3(
+					_elm_lang$html$Html$node,
+					'style',
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html_Attributes$type$('text/css')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$html$Html$text(
+							A2(_debois$elm_mdl$Material_Scheme$scheme, primary, accent))
+						])),
+					content
+				]));
+	});
+var _debois$elm_mdl$Material_Scheme$top = function (content) {
+	return A3(_debois$elm_mdl$Material_Scheme$topWithScheme, _debois$elm_mdl$Material_Color$Grey, _debois$elm_mdl$Material_Color$Grey, content);
+};
+
+var _elm_lang$animation_frame$Native_AnimationFrame = function()
+{
+
+var hasStartTime =
+	window.performance &&
+	window.performance.timing &&
+	window.performance.timing.navigationStart;
+
+var navStart = hasStartTime
+	? window.performance.timing.navigationStart
+	: Date.now();
+
+var rAF = _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)
+{
+	var id = requestAnimationFrame(function(time) {
+		var timeNow = time
+			? (time > navStart ? time : time + navStart)
+			: Date.now();
+
+		callback(_elm_lang$core$Native_Scheduler.succeed(timeNow));
+	});
+
+	return function() {
+		cancelAnimationFrame(id);
+	};
+});
+
+return {
+	rAF: rAF
+};
+
+}();
+
+var _elm_lang$animation_frame$AnimationFrame$rAF = _elm_lang$animation_frame$Native_AnimationFrame.rAF;
+var _elm_lang$animation_frame$AnimationFrame$subscription = _elm_lang$core$Native_Platform.leaf('AnimationFrame');
+var _elm_lang$animation_frame$AnimationFrame$State = F3(
+	function (a, b, c) {
+		return {subs: a, request: b, oldTime: c};
+	});
+var _elm_lang$animation_frame$AnimationFrame$init = _elm_lang$core$Task$succeed(
+	A3(
+		_elm_lang$animation_frame$AnimationFrame$State,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		_elm_lang$core$Maybe$Nothing,
+		0));
+var _elm_lang$animation_frame$AnimationFrame$onEffects = F3(
+	function (router, subs, _p0) {
+		var _p1 = _p0;
+		var _p5 = _p1.request;
+		var _p4 = _p1.oldTime;
+		var _p2 = {ctor: '_Tuple2', _0: _p5, _1: subs};
+		if (_p2._0.ctor === 'Nothing') {
+			if (_p2._1.ctor === '[]') {
+				return _elm_lang$core$Task$succeed(
+					A3(
+						_elm_lang$animation_frame$AnimationFrame$State,
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						_elm_lang$core$Maybe$Nothing,
+						_p4));
+			} else {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					_elm_lang$core$Process$spawn(
+						A2(
+							_elm_lang$core$Task$andThen,
+							_elm_lang$animation_frame$AnimationFrame$rAF,
+							_elm_lang$core$Platform$sendToSelf(router))),
+					function (pid) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							_elm_lang$core$Time$now,
+							function (time) {
+								return _elm_lang$core$Task$succeed(
+									A3(
+										_elm_lang$animation_frame$AnimationFrame$State,
+										subs,
+										_elm_lang$core$Maybe$Just(pid),
+										time));
+							});
+					});
+			}
+		} else {
+			if (_p2._1.ctor === '[]') {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					_elm_lang$core$Process$kill(_p2._0._0),
+					function (_p3) {
+						return _elm_lang$core$Task$succeed(
+							A3(
+								_elm_lang$animation_frame$AnimationFrame$State,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								_elm_lang$core$Maybe$Nothing,
+								_p4));
+					});
+			} else {
+				return _elm_lang$core$Task$succeed(
+					A3(_elm_lang$animation_frame$AnimationFrame$State, subs, _p5, _p4));
+			}
+		}
+	});
+var _elm_lang$animation_frame$AnimationFrame$onSelfMsg = F3(
+	function (router, newTime, _p6) {
+		var _p7 = _p6;
+		var _p10 = _p7.subs;
+		var diff = newTime - _p7.oldTime;
+		var send = function (sub) {
+			var _p8 = sub;
+			if (_p8.ctor === 'Time') {
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					_p8._0(newTime));
+			} else {
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					_p8._0(diff));
+			}
+		};
+		return A2(
+			_elm_lang$core$Task$andThen,
+			_elm_lang$core$Process$spawn(
+				A2(
+					_elm_lang$core$Task$andThen,
+					_elm_lang$animation_frame$AnimationFrame$rAF,
+					_elm_lang$core$Platform$sendToSelf(router))),
+			function (pid) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					_elm_lang$core$Task$sequence(
+						A2(_elm_lang$core$List$map, send, _p10)),
+					function (_p9) {
+						return _elm_lang$core$Task$succeed(
+							A3(
+								_elm_lang$animation_frame$AnimationFrame$State,
+								_p10,
+								_elm_lang$core$Maybe$Just(pid),
+								newTime));
+					});
+			});
+	});
+var _elm_lang$animation_frame$AnimationFrame$Diff = function (a) {
+	return {ctor: 'Diff', _0: a};
+};
+var _elm_lang$animation_frame$AnimationFrame$diffs = function (tagger) {
+	return _elm_lang$animation_frame$AnimationFrame$subscription(
+		_elm_lang$animation_frame$AnimationFrame$Diff(tagger));
+};
+var _elm_lang$animation_frame$AnimationFrame$Time = function (a) {
+	return {ctor: 'Time', _0: a};
+};
+var _elm_lang$animation_frame$AnimationFrame$times = function (tagger) {
+	return _elm_lang$animation_frame$AnimationFrame$subscription(
+		_elm_lang$animation_frame$AnimationFrame$Time(tagger));
+};
+var _elm_lang$animation_frame$AnimationFrame$subMap = F2(
+	function (func, sub) {
+		var _p11 = sub;
+		if (_p11.ctor === 'Time') {
+			return _elm_lang$animation_frame$AnimationFrame$Time(
+				function (_p12) {
+					return func(
+						_p11._0(_p12));
+				});
+		} else {
+			return _elm_lang$animation_frame$AnimationFrame$Diff(
+				function (_p13) {
+					return func(
+						_p11._0(_p13));
+				});
+		}
+	});
+_elm_lang$core$Native_Platform.effectManagers['AnimationFrame'] = {pkg: 'elm-lang/animation-frame', init: _elm_lang$animation_frame$AnimationFrame$init, onEffects: _elm_lang$animation_frame$AnimationFrame$onEffects, onSelfMsg: _elm_lang$animation_frame$AnimationFrame$onSelfMsg, tag: 'sub', subMap: _elm_lang$animation_frame$AnimationFrame$subMap};
+
+var _elm_lang$core$Set$foldr = F3(
+	function (f, b, _p0) {
+		var _p1 = _p0;
+		return A3(
+			_elm_lang$core$Dict$foldr,
+			F3(
+				function (k, _p2, b) {
+					return A2(f, k, b);
+				}),
+			b,
+			_p1._0);
+	});
+var _elm_lang$core$Set$foldl = F3(
+	function (f, b, _p3) {
+		var _p4 = _p3;
+		return A3(
+			_elm_lang$core$Dict$foldl,
+			F3(
+				function (k, _p5, b) {
+					return A2(f, k, b);
+				}),
+			b,
+			_p4._0);
+	});
+var _elm_lang$core$Set$toList = function (_p6) {
+	var _p7 = _p6;
+	return _elm_lang$core$Dict$keys(_p7._0);
+};
+var _elm_lang$core$Set$size = function (_p8) {
+	var _p9 = _p8;
+	return _elm_lang$core$Dict$size(_p9._0);
+};
+var _elm_lang$core$Set$member = F2(
+	function (k, _p10) {
+		var _p11 = _p10;
+		return A2(_elm_lang$core$Dict$member, k, _p11._0);
+	});
+var _elm_lang$core$Set$isEmpty = function (_p12) {
+	var _p13 = _p12;
+	return _elm_lang$core$Dict$isEmpty(_p13._0);
+};
+var _elm_lang$core$Set$Set_elm_builtin = function (a) {
+	return {ctor: 'Set_elm_builtin', _0: a};
+};
+var _elm_lang$core$Set$empty = _elm_lang$core$Set$Set_elm_builtin(_elm_lang$core$Dict$empty);
+var _elm_lang$core$Set$singleton = function (k) {
+	return _elm_lang$core$Set$Set_elm_builtin(
+		A2(
+			_elm_lang$core$Dict$singleton,
+			k,
+			{ctor: '_Tuple0'}));
+};
+var _elm_lang$core$Set$insert = F2(
+	function (k, _p14) {
+		var _p15 = _p14;
+		return _elm_lang$core$Set$Set_elm_builtin(
+			A3(
+				_elm_lang$core$Dict$insert,
+				k,
+				{ctor: '_Tuple0'},
+				_p15._0));
+	});
+var _elm_lang$core$Set$fromList = function (xs) {
+	return A3(_elm_lang$core$List$foldl, _elm_lang$core$Set$insert, _elm_lang$core$Set$empty, xs);
+};
+var _elm_lang$core$Set$map = F2(
+	function (f, s) {
+		return _elm_lang$core$Set$fromList(
+			A2(
+				_elm_lang$core$List$map,
+				f,
+				_elm_lang$core$Set$toList(s)));
+	});
+var _elm_lang$core$Set$remove = F2(
+	function (k, _p16) {
+		var _p17 = _p16;
+		return _elm_lang$core$Set$Set_elm_builtin(
+			A2(_elm_lang$core$Dict$remove, k, _p17._0));
+	});
+var _elm_lang$core$Set$union = F2(
+	function (_p19, _p18) {
+		var _p20 = _p19;
+		var _p21 = _p18;
+		return _elm_lang$core$Set$Set_elm_builtin(
+			A2(_elm_lang$core$Dict$union, _p20._0, _p21._0));
+	});
+var _elm_lang$core$Set$intersect = F2(
+	function (_p23, _p22) {
+		var _p24 = _p23;
+		var _p25 = _p22;
+		return _elm_lang$core$Set$Set_elm_builtin(
+			A2(_elm_lang$core$Dict$intersect, _p24._0, _p25._0));
+	});
+var _elm_lang$core$Set$diff = F2(
+	function (_p27, _p26) {
+		var _p28 = _p27;
+		var _p29 = _p26;
+		return _elm_lang$core$Set$Set_elm_builtin(
+			A2(_elm_lang$core$Dict$diff, _p28._0, _p29._0));
+	});
+var _elm_lang$core$Set$filter = F2(
+	function (p, _p30) {
+		var _p31 = _p30;
+		return _elm_lang$core$Set$Set_elm_builtin(
+			A2(
+				_elm_lang$core$Dict$filter,
+				F2(
+					function (k, _p32) {
+						return p(k);
+					}),
+				_p31._0));
+	});
+var _elm_lang$core$Set$partition = F2(
+	function (p, _p33) {
+		var _p34 = _p33;
+		var _p35 = A2(
+			_elm_lang$core$Dict$partition,
+			F2(
+				function (k, _p36) {
+					return p(k);
+				}),
+			_p34._0);
+		var p1 = _p35._0;
+		var p2 = _p35._1;
+		return {
+			ctor: '_Tuple2',
+			_0: _elm_lang$core$Set$Set_elm_builtin(p1),
+			_1: _elm_lang$core$Set$Set_elm_builtin(p2)
+		};
+	});
+
 var _elm_lang$svg$Svg$text = _elm_lang$virtual_dom$VirtualDom$text;
 var _elm_lang$svg$Svg$svgNamespace = A2(
 	_elm_lang$virtual_dom$VirtualDom$property,
@@ -9082,128 +14503,6 @@ var _elm_lang$svg$Svg_Attributes$additive = _elm_lang$virtual_dom$VirtualDom$att
 var _elm_lang$svg$Svg_Attributes$accumulate = _elm_lang$virtual_dom$VirtualDom$attribute('accumulate');
 var _elm_lang$svg$Svg_Attributes$accelerate = _elm_lang$virtual_dom$VirtualDom$attribute('accelerate');
 var _elm_lang$svg$Svg_Attributes$accentHeight = _elm_lang$virtual_dom$VirtualDom$attribute('accent-height');
-
-var _elm_lang$window$Native_Window = function()
-{
-
-var size = _elm_lang$core$Native_Scheduler.nativeBinding(function(callback)	{
-	callback(_elm_lang$core$Native_Scheduler.succeed({
-		width: window.innerWidth,
-		height: window.innerHeight
-	}));
-});
-
-return {
-	size: size
-};
-
-}();
-var _elm_lang$window$Window_ops = _elm_lang$window$Window_ops || {};
-_elm_lang$window$Window_ops['&>'] = F2(
-	function (t1, t2) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			t1,
-			function (_p0) {
-				return t2;
-			});
-	});
-var _elm_lang$window$Window$onSelfMsg = F3(
-	function (router, dimensions, state) {
-		var _p1 = state;
-		if (_p1.ctor === 'Nothing') {
-			return _elm_lang$core$Task$succeed(state);
-		} else {
-			var send = function (_p2) {
-				var _p3 = _p2;
-				return A2(
-					_elm_lang$core$Platform$sendToApp,
-					router,
-					_p3._0(dimensions));
-			};
-			return A2(
-				_elm_lang$window$Window_ops['&>'],
-				_elm_lang$core$Task$sequence(
-					A2(_elm_lang$core$List$map, send, _p1._0.subs)),
-				_elm_lang$core$Task$succeed(state));
-		}
-	});
-var _elm_lang$window$Window$init = _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
-var _elm_lang$window$Window$size = _elm_lang$window$Native_Window.size;
-var _elm_lang$window$Window$width = A2(
-	_elm_lang$core$Task$map,
-	function (_) {
-		return _.width;
-	},
-	_elm_lang$window$Window$size);
-var _elm_lang$window$Window$height = A2(
-	_elm_lang$core$Task$map,
-	function (_) {
-		return _.height;
-	},
-	_elm_lang$window$Window$size);
-var _elm_lang$window$Window$onEffects = F3(
-	function (router, newSubs, oldState) {
-		var _p4 = {ctor: '_Tuple2', _0: oldState, _1: newSubs};
-		if (_p4._0.ctor === 'Nothing') {
-			if (_p4._1.ctor === '[]') {
-				return _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
-			} else {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					_elm_lang$core$Process$spawn(
-						A3(
-							_elm_lang$dom$Dom_LowLevel$onWindow,
-							'resize',
-							_elm_lang$core$Json_Decode$succeed(
-								{ctor: '_Tuple0'}),
-							function (_p5) {
-								return A2(
-									_elm_lang$core$Task$andThen,
-									_elm_lang$window$Window$size,
-									_elm_lang$core$Platform$sendToSelf(router));
-							})),
-					function (pid) {
-						return _elm_lang$core$Task$succeed(
-							_elm_lang$core$Maybe$Just(
-								{subs: newSubs, pid: pid}));
-					});
-			}
-		} else {
-			if (_p4._1.ctor === '[]') {
-				return A2(
-					_elm_lang$window$Window_ops['&>'],
-					_elm_lang$core$Process$kill(_p4._0._0.pid),
-					_elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing));
-			} else {
-				return _elm_lang$core$Task$succeed(
-					_elm_lang$core$Maybe$Just(
-						{subs: newSubs, pid: _p4._0._0.pid}));
-			}
-		}
-	});
-var _elm_lang$window$Window$subscription = _elm_lang$core$Native_Platform.leaf('Window');
-var _elm_lang$window$Window$Size = F2(
-	function (a, b) {
-		return {width: a, height: b};
-	});
-var _elm_lang$window$Window$MySub = function (a) {
-	return {ctor: 'MySub', _0: a};
-};
-var _elm_lang$window$Window$resizes = function (tagger) {
-	return _elm_lang$window$Window$subscription(
-		_elm_lang$window$Window$MySub(tagger));
-};
-var _elm_lang$window$Window$subMap = F2(
-	function (func, _p6) {
-		var _p7 = _p6;
-		return _elm_lang$window$Window$MySub(
-			function (_p8) {
-				return func(
-					_p7._0(_p8));
-			});
-	});
-_elm_lang$core$Native_Platform.effectManagers['Window'] = {pkg: 'elm-lang/window', init: _elm_lang$window$Window$init, onEffects: _elm_lang$window$Window$onEffects, onSelfMsg: _elm_lang$window$Window$onSelfMsg, tag: 'sub', subMap: _elm_lang$window$Window$subMap};
 
 //import Dict, List, Maybe, Native.Scheduler //
 
@@ -9957,54 +15256,65 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 		A2(_elm_lang$core$Basics_ops['++'], viewModelDim, viewErrorMessages));
 };
 var _user$project$BoardViewer$viewStreaming = function (model) {
-	var _p4 = model.isInitializated;
-	if (_p4 === false) {
-		return A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[]));
-	} else {
-		return A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$html$Html$text(
-					A2(
-						_elm_lang$core$Basics_ops['++'],
-						'Streaming: ',
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							_elm_lang$core$Basics$toString(model.streamingLeft),
-							's')))
-				]));
-	}
+	var calcPerc = F3(
+		function (completed, total, totalPerc) {
+			return (completed * totalPerc) / ((total * totalPerc) / 100.0);
+		});
+	var completitionPerc = function (isPrestreaming) {
+		if (isPrestreaming) {
+			return A3(calcPerc, model.preStreaming, 3.0, 33);
+		} else {
+			var preStreamingPerc = completitionPerc(true);
+			var leftPerc = 100.0 - preStreamingPerc;
+			var streamingPerc = A3(calcPerc, model.streamingTot - model.streamingLeft, model.streamingTot, leftPerc);
+			return streamingPerc + preStreamingPerc;
+		}
+	};
+	var perc = A2(
+		_elm_lang$core$Basics$min,
+		100.0,
+		completitionPerc(
+			_elm_lang$core$Basics$not(model.isInitializated)));
+	return A2(
+		_debois$elm_mdl$Material_Grid$grid,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		_elm_lang$core$Native_List.fromArray(
+			[
+				A2(
+				_debois$elm_mdl$Material_Grid$cell,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$All, 4)
+					]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_debois$elm_mdl$Material_Progress$progress(perc)
+					]))
+			]));
 };
 var _user$project$BoardViewer$model_loadStreamedData = function (m1) {
-	var _p5 = m1.boardInfo;
-	if (_p5.ctor === 'Nothing') {
-		var _p6 = _elm_lang$core$List$head(
+	var _p4 = m1.boardInfo;
+	if (_p4.ctor === 'Nothing') {
+		var _p5 = _elm_lang$core$List$head(
 			_elm_lang$core$Dict$keys(m1.streamedBoardInfo));
-		if (_p6.ctor === 'Nothing') {
+		if (_p5.ctor === 'Nothing') {
 			return {ctor: '_Tuple2', _0: m1, _1: false};
 		} else {
-			var _p9 = _p6._0;
-			var _p7 = A2(_elm_lang$core$Dict$get, _p9, m1.streamedBoardInfo);
-			if (_p7.ctor === 'Nothing') {
+			var _p8 = _p5._0;
+			var _p6 = A2(_elm_lang$core$Dict$get, _p8, m1.streamedBoardInfo);
+			if (_p6.ctor === 'Nothing') {
 				return {ctor: '_Tuple2', _0: m1, _1: false};
 			} else {
-				var _p8 = _p7._0;
+				var _p7 = _p6._0;
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						m1,
 						{
-							boardInfo: _elm_lang$core$Maybe$Just(_p8),
-							streamedBoardInfo: A2(_elm_lang$core$Dict$remove, _p9, m1.streamedBoardInfo),
-							nextEvents: _p8.events
+							boardInfo: _elm_lang$core$Maybe$Just(_p7),
+							streamedBoardInfo: A2(_elm_lang$core$Dict$remove, _p8, m1.streamedBoardInfo),
+							nextEvents: _p7.events
 						}),
 					_1: true
 				};
@@ -10034,29 +15344,29 @@ var _user$project$BoardViewer$cmd_make = function (msg) {
 };
 var _user$project$BoardViewer$model_fromColorToExplosionGradientId = F2(
 	function (m, c) {
-		var _p10 = A2(_elm_lang$core$Dict$get, c, m.usedRobotColors);
-		if (_p10.ctor === 'Nothing') {
+		var _p9 = A2(_elm_lang$core$Dict$get, c, m.usedRobotColors);
+		if (_p9.ctor === 'Nothing') {
 			return 'red';
 		} else {
 			return A2(
 				_elm_lang$core$Basics_ops['++'],
 				'url(#',
-				A2(_elm_lang$core$Basics_ops['++'], _p10._0, ')'));
+				A2(_elm_lang$core$Basics_ops['++'], _p9._0, ')'));
 		}
 	});
 var _user$project$BoardViewer$model_robotColor = F2(
 	function (m, id) {
-		var _p11 = A2(_elm_lang$core$Dict$get, id, m.robotInfo);
-		if (_p11.ctor === 'Nothing') {
+		var _p10 = A2(_elm_lang$core$Dict$get, id, m.robotInfo);
+		if (_p10.ctor === 'Nothing') {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 290, column: 5},
-					end: {line: 292, column: 29}
+					start: {line: 305, column: 5},
+					end: {line: 307, column: 29}
 				},
-				_p11)('unexpeced error in the code: 1053');
+				_p10)('unexpeced error in the code: 1053');
 		} else {
-			return _p11._0._1.color;
+			return _p10._0._1.color;
 		}
 	});
 var _user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime = F2(
@@ -10413,37 +15723,37 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 		});
 	var drawActiveEvent = F2(
 		function (results1, be) {
-			var _p13 = be.event;
-			switch (_p13.ctor) {
+			var _p12 = be.event;
+			switch (_p12.ctor) {
 				case 'EDisplayMissile':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawMissile, be.activationTime, _p13._0),
+						A2(drawMissile, be.activationTime, _p12._0),
 						results1);
 				case 'EDisplayRobot':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						drawRobot(_p13._0),
+						drawRobot(_p12._0),
 						results1);
 				case 'EDisplayScan':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawScan, be.activationTime, _p13._0),
+						A2(drawScan, be.activationTime, _p12._0),
 						results1);
 				case 'EDisplayTrack':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawTrack, be.activationTime, _p13._0),
+						A2(drawTrack, be.activationTime, _p12._0),
 						results1);
 				case 'EDisplayExplosion':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawExplosion, be.activationTime, _p13._0),
+						A2(drawExplosion, be.activationTime, _p12._0),
 						results1);
 				case 'EDisplayLostPoints':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawLostPoints, be.activationTime, _p13._0),
+						A2(drawLostPoints, be.activationTime, _p12._0),
 						results1);
 				default:
 					return results1;
@@ -10459,17 +15769,17 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			[]),
 		model.activeEvents);
 	var boardInfo = function () {
-		var _p14 = model.boardInfo;
-		if (_p14.ctor === 'Just') {
-			return _p14._0;
+		var _p13 = model.boardInfo;
+		if (_p13.ctor === 'Just') {
+			return _p13._0;
 		} else {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 895, column: 13},
-					end: {line: 897, column: 63}
+					start: {line: 940, column: 13},
+					end: {line: 942, column: 63}
 				},
-				_p14)('contract not respected');
+				_p13)('contract not respected');
 		}
 	}();
 	var boardMaxX = boardInfo.maxBoardX;
@@ -10512,17 +15822,17 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				{ctor: '_Tuple2', _0: 'justify-content', _1: 'flex-start'}
 			]));
 	var boardInfo = function () {
-		var _p16 = model.boardInfo;
-		if (_p16.ctor === 'Just') {
-			return _p16._0;
+		var _p15 = model.boardInfo;
+		if (_p15.ctor === 'Just') {
+			return _p15._0;
 		} else {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 828, column: 13},
-					end: {line: 830, column: 64}
+					start: {line: 873, column: 13},
+					end: {line: 875, column: 64}
 				},
-				_p16)('contract not respected');
+				_p15)('contract not respected');
 		}
 	}();
 	var svgViewBox = A2(
@@ -10609,8 +15919,8 @@ var _user$project$BoardViewer$viewContent = function (model) {
 };
 var _user$project$BoardViewer$view = function (model) {
 	var isThereBoard = function () {
-		var _p18 = model.boardInfo;
-		if (_p18.ctor === 'Nothing') {
+		var _p17 = model.boardInfo;
+		if (_p17.ctor === 'Nothing') {
 			return false;
 		} else {
 			return true;
@@ -10622,10 +15932,10 @@ var _user$project$BoardViewer$view = function (model) {
 };
 var _user$project$BoardViewer$polarToCartesian = F4(
 	function (centerX, centerY, radius, angleInRadians) {
-		var _p19 = _elm_lang$core$Basics$fromPolar(
+		var _p18 = _elm_lang$core$Basics$fromPolar(
 			{ctor: '_Tuple2', _0: radius, _1: angleInRadians});
-		var x = _p19._0;
-		var y = _p19._1;
+		var x = _p18._0;
+		var y = _p18._1;
 		return {ctor: '_Tuple2', _0: x + centerX, _1: y + centerY};
 	});
 var _user$project$BoardViewer$distanceXYXY = F4(
@@ -10665,11 +15975,11 @@ var _user$project$BoardViewer$RobotInfo = function (a) {
 	};
 };
 var _user$project$BoardViewer$robotInfoDecoder = function () {
-	var part2 = function (_p20) {
-		var _p21 = _p20;
+	var part2 = function (_p19) {
+		var _p20 = _p19;
 		return A7(
 			_elm_lang$core$Json_Decode$object6,
-			A4(_user$project$BoardViewer$RobotInfo, _p21._0, _p21._1, _p21._2, _p21._3),
+			A4(_user$project$BoardViewer$RobotInfo, _p20._0, _p20._1, _p20._2, _p20._3),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'currentSpeed', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'requiredSpeed', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'acceleration', _elm_lang$core$Json_Decode$float),
@@ -10792,7 +16102,13 @@ var _user$project$BoardViewer$Model = function (a) {
 											return function (l) {
 												return function (m) {
 													return function (n) {
-														return {isInitializated: a, windowSize: b, streamingLeft: c, simulationIsStarted: d, boardInfo: e, streamedBoardInfo: f, nextEvents: g, activeEvents: h, robotInfo: i, usedRobotColors: j, currentSimulationTime: k, errorMessages: l, totRedrawFrames: m, totSeconds: n};
+														return function (o) {
+															return function (p) {
+																return function (q) {
+																	return {isInitializated: a, windowSize: b, preStreaming: c, streamingTot: d, streamingLeft: e, simulationIsStarted: f, boardInfo: g, streamedBoardInfo: h, nextEvents: i, activeEvents: j, robotInfo: k, usedRobotColors: l, currentSimulationTime: m, errorMessages: n, totRedrawFrames: o, totSeconds: p, mdl: q};
+																};
+															};
+														};
 													};
 												};
 											};
@@ -10832,18 +16148,18 @@ var _user$project$BoardViewer$model_processEvent = F2(
 					_elm_lang$core$Basics$degrees(scan.semiaperture)));
 			var directionRad = _user$project$BoardViewer$normalizeRad(
 				_elm_lang$core$Basics$degrees(scan.direction));
-			var _p22 = {
+			var _p21 = {
 				ctor: '_Tuple2',
 				_0: _user$project$BoardViewer$normalizeRad(directionRad - semiapertureRad),
 				_1: _user$project$BoardViewer$normalizeRad(directionRad + semiapertureRad)
 			};
-			var startAngleRad = _p22._0;
-			var endAngleRad = _p22._1;
+			var startAngleRad = _p21._0;
+			var endAngleRad = _p21._1;
 			var centerY = scan.robot.posY;
 			var centerX = scan.robot.posX;
-			var _p23 = function () {
-				var _p24 = scan.hitRobot;
-				if (_p24.ctor === 'Nothing') {
+			var _p22 = function () {
+				var _p23 = scan.hitRobot;
+				if (_p23.ctor === 'Nothing') {
 					return {
 						ctor: '_Tuple4',
 						_0: false,
@@ -10852,31 +16168,31 @@ var _user$project$BoardViewer$model_processEvent = F2(
 						_3: centerY + (scan.scanMaxDistance * _elm_lang$core$Basics$sin(directionRad))
 					};
 				} else {
-					var _p25 = _p24._0;
+					var _p24 = _p23._0;
 					return {
 						ctor: '_Tuple4',
 						_0: true,
-						_1: A4(_user$project$BoardViewer$distanceXYXY, centerX, centerY, _p25.posX, _p25.posY),
-						_2: _p25.posX,
-						_3: _p25.posY
+						_1: A4(_user$project$BoardViewer$distanceXYXY, centerX, centerY, _p24.posX, _p24.posY),
+						_2: _p24.posX,
+						_3: _p24.posY
 					};
 				}
 			}();
-			var hasRecognizedSomething = _p23._0;
-			var distance = _p23._1;
-			var targetX = _p23._2;
-			var targetY = _p23._3;
+			var hasRecognizedSomething = _p22._0;
+			var distance = _p22._1;
+			var targetX = _p22._2;
+			var targetY = _p22._3;
 			var isLimitCase = _elm_lang$core$Native_Utils.cmp(distance, 0.1) < 1;
 			var targetLineColor = hasRecognizedSomething ? 'red' : 'blue';
-			var _p26 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, startAngleRad);
-			var startX = _p26._0;
-			var startY = _p26._1;
-			var _p27 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, endAngleRad);
-			var endX = _p27._0;
-			var endY = _p27._1;
-			var _p28 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, directionRad);
-			var directionX = _p28._0;
-			var directionY = _p28._1;
+			var _p25 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, startAngleRad);
+			var startX = _p25._0;
+			var startY = _p25._1;
+			var _p26 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, endAngleRad);
+			var endX = _p26._0;
+			var endY = _p26._1;
+			var _p27 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, directionRad);
+			var directionX = _p27._0;
+			var directionY = _p27._1;
 			var radarDebugLine = A2(
 				_elm_lang$svg$Svg$g,
 				_elm_lang$core$Native_List.fromArray(
@@ -11078,23 +16394,23 @@ var _user$project$BoardViewer$model_processEvent = F2(
 						{event: e}));
 			});
 		var robotInfo = function (robotId) {
-			var _p29 = A2(_elm_lang$core$Dict$get, robotId, m1.robotInfo);
-			if (_p29.ctor === 'Nothing') {
+			var _p28 = A2(_elm_lang$core$Dict$get, robotId, m1.robotInfo);
+			if (_p28.ctor === 'Nothing') {
 				return _elm_lang$core$Native_Utils.crashCase(
 					'BoardViewer',
 					{
-						start: {line: 515, column: 13},
-						end: {line: 517, column: 28}
+						start: {line: 539, column: 13},
+						end: {line: 541, column: 28}
 					},
-					_p29)('impossible');
+					_p28)('impossible');
 			} else {
-				return _p29._0;
+				return _p28._0;
 			}
 		};
 		var updateRobot = F2(
 			function (m, r) {
-				var _p31 = robotInfo(r.robotId);
-				var ri = _p31._1;
+				var _p30 = robotInfo(r.robotId);
+				var ri = _p30._1;
 				return _elm_lang$core$Native_Utils.update(
 					m,
 					{
@@ -11113,9 +16429,9 @@ var _user$project$BoardViewer$model_processEvent = F2(
 			});
 		var updateMaybeRobot = F2(
 			function (m, mr) {
-				var _p32 = mr;
-				if (_p32.ctor === 'Just') {
-					return A2(updateRobot, m, _p32._0);
+				var _p31 = mr;
+				if (_p31.ctor === 'Just') {
+					return A2(updateRobot, m, _p31._0);
 				} else {
 					return m;
 				}
@@ -11168,21 +16484,21 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				msg: msg
 			};
 		};
-		var _p33 = be.event;
-		switch (_p33.ctor) {
+		var _p32 = be.event;
+		switch (_p32.ctor) {
 			case 'ECreateRobot':
-				var _p34 = _p33._0;
+				var _p33 = _p32._0;
 				return _elm_lang$core$Native_Utils.update(
 					m1,
 					{
 						robotInfo: A3(
 							_elm_lang$core$Dict$insert,
-							_p34.robot.robotId,
-							{ctor: '_Tuple2', _0: be.activationTime, _1: _p34},
+							_p33.robot.robotId,
+							{ctor: '_Tuple2', _0: be.activationTime, _1: _p33},
 							m1.robotInfo),
 						usedRobotColors: A3(
 							_elm_lang$core$Dict$insert,
-							_p34.color,
+							_p33.color,
 							A2(
 								_elm_lang$core$Basics_ops['++'],
 								'id_',
@@ -11195,76 +16511,78 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				return _elm_lang$core$Native_Utils.update(
 					m1,
 					{
-						robotInfo: A2(_elm_lang$core$Dict$remove, _p33._0.robot.robotId, m1.robotInfo)
+						robotInfo: A2(_elm_lang$core$Dict$remove, _p32._0.robot.robotId, m1.robotInfo)
 					});
 			case 'EDrive':
-				return A2(updateRobot, m1, _p33._0.robot);
+				return A2(updateRobot, m1, _p32._0.robot);
 			case 'EScan':
-				var _p35 = _p33._0;
+				var _p34 = _p32._0;
 				return A2(
 					addActiveEvent,
 					A2(
 						updateMaybeRobot,
-						A2(updateRobot, m1, _p35.robot),
-						_p35.hitRobot),
+						A2(updateRobot, m1, _p34.robot),
+						_p34.hitRobot),
 					_user$project$BoardViewer$EDisplayScan(
-						initActiveScan(_p35)));
+						initActiveScan(_p34)));
 			case 'EDisplayScan':
 				return m1;
 			case 'EMissile':
-				var _p36 = _p33._0;
+				var _p35 = _p32._0;
 				return A2(
 					addActiveEvent,
-					A2(updateRobot, m1, _p36.robot),
+					A2(updateRobot, m1, _p35.robot),
 					_user$project$BoardViewer$EDisplayMissile(
-						initActiveMissile(_p36)));
+						initActiveMissile(_p35)));
 			case 'EDisplayMissile':
-				var _p37 = _p33._0;
-				return (_elm_lang$core$Native_Utils.cmp(_p37.deactivationTime, currentTime) < 1) ? A2(
+				var _p36 = _p32._0;
+				return (_elm_lang$core$Native_Utils.cmp(_p36.deactivationTime, currentTime) < 1) ? A2(
 					addActiveEvent,
 					m1,
 					_user$project$BoardViewer$EDisplayExplosion(
-						initActiveExplosion(_p37))) : A2(
+						initActiveExplosion(_p36))) : A2(
 					addActiveEvent,
 					m1,
 					_user$project$BoardViewer$EDisplayMissile(
-						updateActiveMissile(_p37)));
+						updateActiveMissile(_p36)));
 			case 'EDisplayExplosion':
-				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+				return (_elm_lang$core$Native_Utils.cmp(_p32._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
 			case 'EDisplayTrack':
-				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+				return (_elm_lang$core$Native_Utils.cmp(_p32._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
 			case 'EDisplayLostPoints':
-				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+				return (_elm_lang$core$Native_Utils.cmp(_p32._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
 			case 'EExplosion':
-				var _p38 = _p33._0;
-				var m2 = A2(updateRobot, m1, _p38.robot);
-				var m3 = A2(updateRobot, m2, _p38.hitRobot);
+				var _p37 = _p32._0;
+				var m2 = A2(updateRobot, m1, _p37.robot);
+				var m3 = A2(updateRobot, m2, _p37.hitRobot);
 				var m4 = A2(
 					addActiveEvent,
 					m3,
 					_user$project$BoardViewer$EDisplayLostPoints(
-						initActiveLostPoints(_p38)));
+						initActiveLostPoints(_p37)));
 				return m4;
 			case 'ERobotCollision':
-				return A2(updateRobot, m1, _p33._0.robot);
+				return A2(updateRobot, m1, _p32._0.robot);
 			default:
 				return m1;
 		}
 	});
 var _user$project$BoardViewer$model_init = F2(
 	function (m1, bi) {
+		var ts = bi.streamDelay * 2.0;
 		var m2 = _elm_lang$core$Native_Utils.update(
 			m1,
 			{
 				isInitializated: true,
-				streamingLeft: bi.streamDelay * 2,
+				streamingLeft: ts,
+				streamingTot: ts,
 				boardInfo: _elm_lang$core$Maybe$Just(bi),
 				currentSimulationTime: bi.startTime
 			});
 		var initRobot = F2(
 			function (e, m) {
-				var _p39 = e.event;
-				if (_p39.ctor === 'ECreateRobot') {
+				var _p38 = e.event;
+				if (_p38.ctor === 'ECreateRobot') {
 					return A2(_user$project$BoardViewer$model_processEvent, m, e);
 				} else {
 					return m;
@@ -11291,47 +16609,47 @@ var _user$project$BoardViewer$model_processActiveEvents = function (m1) {
 var _user$project$BoardViewer$model_processNextEvents = function (m1) {
 	model_processNextEvents:
 	while (true) {
-		var _p40 = m1.boardInfo;
-		if (_p40.ctor === 'Nothing') {
+		var _p39 = m1.boardInfo;
+		if (_p39.ctor === 'Nothing') {
 			return m1;
 		} else {
-			var _p41 = _elm_lang$core$List$head(m1.nextEvents);
-			if (_p41.ctor === 'Nothing') {
-				var _p42 = _elm_lang$core$Native_Utils.cmp(m1.currentSimulationTime, _p40._0.endTime) > 0;
-				if (_p42 === true) {
-					var _p43 = _user$project$BoardViewer$model_loadStreamedData(
+			var _p40 = _elm_lang$core$List$head(m1.nextEvents);
+			if (_p40.ctor === 'Nothing') {
+				var _p41 = _elm_lang$core$Native_Utils.cmp(m1.currentSimulationTime, _p39._0.endTime) > 0;
+				if (_p41 === true) {
+					var _p42 = _user$project$BoardViewer$model_loadStreamedData(
 						_elm_lang$core$Native_Utils.update(
 							m1,
 							{boardInfo: _elm_lang$core$Maybe$Nothing}));
-					var m2 = _p43._0;
-					var _v21 = m2;
-					m1 = _v21;
+					var m2 = _p42._0;
+					var _v20 = m2;
+					m1 = _v20;
 					continue model_processNextEvents;
 				} else {
 					return m1;
 				}
 			} else {
-				var _p46 = _p41._0;
-				var _p44 = _elm_lang$core$Native_Utils.cmp(_p46.activationTime, m1.currentSimulationTime) < 1;
-				if (_p44 === false) {
+				var _p45 = _p40._0;
+				var _p43 = _elm_lang$core$Native_Utils.cmp(_p45.activationTime, m1.currentSimulationTime) < 1;
+				if (_p43 === false) {
 					return m1;
 				} else {
 					var m2 = _elm_lang$core$Native_Utils.update(
 						m1,
 						{
 							nextEvents: function () {
-								var _p45 = _elm_lang$core$List$tail(m1.nextEvents);
-								if (_p45.ctor === 'Nothing') {
+								var _p44 = _elm_lang$core$List$tail(m1.nextEvents);
+								if (_p44.ctor === 'Nothing') {
 									return _elm_lang$core$Native_List.fromArray(
 										[]);
 								} else {
-									return _p45._0;
+									return _p44._0;
 								}
 							}()
 						});
-					var m3 = A2(_user$project$BoardViewer$model_processEvent, m2, _p46);
-					var _v24 = m3;
-					m1 = _v24;
+					var m3 = A2(_user$project$BoardViewer$model_processEvent, m2, _p45);
+					var _v23 = m3;
+					m1 = _v23;
 					continue model_processNextEvents;
 				}
 			}
@@ -11356,27 +16674,27 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 			cycle(st0),
 			cycle(st1)) < 0) : false;
 	};
-	var processRobot = function (_p47) {
-		var _p48 = _p47;
-		var _p50 = _p48._1;
-		var direction = _p50.robot.direction;
+	var processRobot = function (_p46) {
+		var _p47 = _p46;
+		var _p49 = _p47._1;
+		var direction = _p49.robot.direction;
 		var thereIsMirror = ((_elm_lang$core$Native_Utils.cmp(direction, 0.0) > -1) && (_elm_lang$core$Native_Utils.cmp(direction, 90.0) < 1)) || (_elm_lang$core$Native_Utils.cmp(direction, 270.0) > -1);
-		var robotInfo = _p50.robot;
-		var deltaTimeToRequiredSpeed = (_p50.robot.requiredSpeed - _p50.robot.currentSpeed) / _p50.robot.acceleration;
-		var deltaTime = simulationTime - _p48._0;
-		var _p49 = (_elm_lang$core$Native_Utils.cmp(deltaTime, deltaTimeToRequiredSpeed) > 0) ? {ctor: '_Tuple3', _0: deltaTimeToRequiredSpeed, _1: deltaTime - deltaTimeToRequiredSpeed, _2: 0.0} : {ctor: '_Tuple3', _0: deltaTime, _1: 0, _2: _p50.robot.acceleration};
-		var deltaTimeWithNormalAcceleration = _p49._0;
-		var deltaTimeWithMaxSpeed = _p49._1;
-		var currentAcceleration = _p49._2;
-		var movement1 = (_p50.robot.currentSpeed * deltaTimeWithNormalAcceleration) + ((0.5 * _p50.robot.acceleration) * (deltaTimeWithNormalAcceleration * deltaTimeWithNormalAcceleration));
-		var movement2 = _p50.robot.requiredSpeed * deltaTimeWithMaxSpeed;
+		var robotInfo = _p49.robot;
+		var deltaTimeToRequiredSpeed = (_p49.robot.requiredSpeed - _p49.robot.currentSpeed) / _p49.robot.acceleration;
+		var deltaTime = simulationTime - _p47._0;
+		var _p48 = (_elm_lang$core$Native_Utils.cmp(deltaTime, deltaTimeToRequiredSpeed) > 0) ? {ctor: '_Tuple3', _0: deltaTimeToRequiredSpeed, _1: deltaTime - deltaTimeToRequiredSpeed, _2: 0.0} : {ctor: '_Tuple3', _0: deltaTime, _1: 0, _2: _p49.robot.acceleration};
+		var deltaTimeWithNormalAcceleration = _p48._0;
+		var deltaTimeWithMaxSpeed = _p48._1;
+		var currentAcceleration = _p48._2;
+		var movement1 = (_p49.robot.currentSpeed * deltaTimeWithNormalAcceleration) + ((0.5 * _p49.robot.acceleration) * (deltaTimeWithNormalAcceleration * deltaTimeWithNormalAcceleration));
+		var movement2 = _p49.robot.requiredSpeed * deltaTimeWithMaxSpeed;
 		var movement = movement1 + movement2;
 		var dy = movement * _elm_lang$core$Basics$sin(
-			_elm_lang$core$Basics$degrees(_p50.robot.direction));
-		var posY = _p50.robot.posY + dy;
+			_elm_lang$core$Basics$degrees(_p49.robot.direction));
+		var posY = _p49.robot.posY + dy;
 		var dx = movement * _elm_lang$core$Basics$cos(
-			_elm_lang$core$Basics$degrees(_p50.robot.direction));
-		var posX = _p50.robot.posX + dx;
+			_elm_lang$core$Basics$degrees(_p49.robot.direction));
+		var posX = _p49.robot.posX + dx;
 		var track = {
 			deactivationTime: simulationTime + trackPermanence,
 			lineCords: _elm_lang$core$Native_List.fromArray(
@@ -11389,16 +16707,16 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 					_elm_lang$core$Basics$toString(posX + 1.0)),
 					_elm_lang$svg$Svg_Attributes$y2(
 					_elm_lang$core$Basics$toString(posY + 1.0)),
-					_elm_lang$svg$Svg_Attributes$stroke(_p50.color)
+					_elm_lang$svg$Svg_Attributes$stroke(_p49.color)
 				])
 		};
-		var reloadingTime1 = _p50.robot.reloadingTime - deltaTime;
+		var reloadingTime1 = _p49.robot.reloadingTime - deltaTime;
 		var reloadingTime2 = (_elm_lang$core$Native_Utils.cmp(reloadingTime1, 0.0) < 0) ? 0.0 : reloadingTime1;
 		return {
 			ctor: '_Tuple2',
 			_0: _user$project$BoardViewer$EDisplayRobot(
 				_elm_lang$core$Native_Utils.update(
-					_p50,
+					_p49,
 					{
 						robot: _elm_lang$core$Native_Utils.update(
 							robotInfo,
@@ -11410,21 +16728,21 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 	var finalEvents = A3(
 		_elm_lang$core$Dict$foldl,
 		F3(
-			function (_p52, _p51, events1) {
-				var _p53 = _p51;
-				var _p56 = _p53._0;
-				var deltaTime = simulationTime - _p56;
-				var _p54 = processRobot(
-					{ctor: '_Tuple2', _0: _p56, _1: _p53._1});
-				var robotEvent = _p54._0;
-				var activeTrack = _p54._1;
+			function (_p51, _p50, events1) {
+				var _p52 = _p50;
+				var _p55 = _p52._0;
+				var deltaTime = simulationTime - _p55;
+				var _p53 = processRobot(
+					{ctor: '_Tuple2', _0: _p55, _1: _p52._1});
+				var robotEvent = _p53._0;
+				var activeTrack = _p53._1;
 				var events2 = function () {
-					var _p55 = isTimeToLeaveTheTrack(deltaTime);
-					if (_p55 === true) {
+					var _p54 = isTimeToLeaveTheTrack(deltaTime);
+					if (_p54 === true) {
 						return A2(
 							_elm_lang$core$List_ops['::'],
 							{
-								activationTime: _p56,
+								activationTime: _p55,
 								event: _user$project$BoardViewer$EDisplayTrack(activeTrack)
 							},
 							events1);
@@ -11434,7 +16752,7 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 				}();
 				var events3 = A2(
 					_elm_lang$core$List_ops['::'],
-					{activationTime: _p56, event: robotEvent},
+					{activationTime: _p55, event: robotEvent},
 					events2);
 				return events3;
 			}),
@@ -11447,11 +16765,11 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 };
 var _user$project$BoardViewer$model_processAllEvents = F2(
 	function (m1, deltaRealTimeSeconds) {
-		var _p57 = m1.boardInfo;
-		if (_p57.ctor === 'Nothing') {
+		var _p56 = m1.boardInfo;
+		if (_p56.ctor === 'Nothing') {
 			return m1;
 		} else {
-			var deltaTime = A2(_user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime, _p57._0, deltaRealTimeSeconds);
+			var deltaTime = A2(_user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime, _p56._0, deltaRealTimeSeconds);
 			var m2 = _elm_lang$core$Native_Utils.update(
 				m1,
 				{currentSimulationTime: m1.currentSimulationTime + deltaTime, totRedrawFrames: m1.totRedrawFrames + 1, totSeconds: m1.totSeconds + deltaRealTimeSeconds});
@@ -11463,9 +16781,9 @@ var _user$project$BoardViewer$model_processAllEvents = F2(
 	});
 var _user$project$BoardViewer$model_advance = F2(
 	function (m1, deltaRealTimeSeconds) {
-		var _p58 = _user$project$BoardViewer$model_loadStreamedData(m1);
-		var m2 = _p58._0;
-		var canProcess = _p58._1;
+		var _p57 = _user$project$BoardViewer$model_loadStreamedData(m1);
+		var m2 = _p57._0;
+		var canProcess = _p57._1;
 		return canProcess ? A2(_user$project$BoardViewer$model_processAllEvents, m2, deltaRealTimeSeconds) : m2;
 	});
 var _user$project$BoardViewer$EDrive = function (a) {
@@ -11490,8 +16808,8 @@ var _user$project$BoardViewer$ECreateRobot = function (a) {
 	return {ctor: 'ECreateRobot', _0: a};
 };
 var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
-	var _p59 = eventType;
-	switch (_p59) {
+	var _p58 = eventType;
+	switch (_p58) {
 		case 1:
 			return A2(_elm_lang$core$Json_Decode$map, _user$project$BoardViewer$ECreateRobot, _user$project$BoardViewer$eventCreateRobotDecoder);
 		case 2:
@@ -11510,10 +16828,10 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1193, column: 5},
-					end: {line: 1201, column: 76}
+					start: {line: 1238, column: 5},
+					end: {line: 1246, column: 76}
 				},
-				_p59)(
+				_p58)(
 				A2(
 					_elm_lang$core$Basics_ops['++'],
 					'Unknown eventType tag ',
@@ -11542,6 +16860,9 @@ var _user$project$BoardViewer$boardInfoDecoder = A9(
 		_elm_lang$core$Json_Decode_ops[':='],
 		'events',
 		_elm_lang$core$Json_Decode$list(_user$project$BoardViewer$boardEventDecoder)));
+var _user$project$BoardViewer$Mdl = function (a) {
+	return {ctor: 'Mdl', _0: a};
+};
 var _user$project$BoardViewer$MsgWindowSize = function (a) {
 	return {ctor: 'MsgWindowSize', _0: a};
 };
@@ -11563,7 +16884,9 @@ var _user$project$BoardViewer$init = function () {
 	var m = {
 		isInitializated: false,
 		windowSize: {width: 0, height: 0},
-		streamingLeft: 0,
+		preStreaming: 0.0,
+		streamingTot: 0.0,
+		streamingLeft: 0.0,
 		simulationIsStarted: false,
 		boardInfo: _elm_lang$core$Maybe$Nothing,
 		streamedBoardInfo: _elm_lang$core$Dict$empty,
@@ -11577,7 +16900,8 @@ var _user$project$BoardViewer$init = function () {
 		errorMessages: _elm_lang$core$Native_List.fromArray(
 			[]),
 		totRedrawFrames: 0,
-		totSeconds: 0.0
+		totSeconds: 0.0,
+		mdl: _debois$elm_mdl$Material$model
 	};
 	return {
 		ctor: '_Tuple2',
@@ -11609,8 +16933,8 @@ var _user$project$BoardViewer$fetchBoardInfo = function (isInit) {
 };
 var _user$project$BoardViewer$update = F2(
 	function (msg, model1) {
-		var _p61 = msg;
-		switch (_p61.ctor) {
+		var _p60 = msg;
+		switch (_p60.ctor) {
 			case 'MsgInitBoard':
 				return {
 					ctor: '_Tuple2',
@@ -11618,18 +16942,18 @@ var _user$project$BoardViewer$update = F2(
 					_1: _user$project$BoardViewer$fetchBoardInfo(true)
 				};
 			case 'MsgStreamBoardInfo':
-				var _p63 = _p61._0;
-				var _p62 = model1.isInitializated;
-				if (_p62 === false) {
+				var _p62 = _p60._0;
+				var _p61 = model1.isInitializated;
+				if (_p61 === false) {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_init, model1, _p63),
+						_0: A2(_user$project$BoardViewer$model_init, model1, _p62),
 						_1: _user$project$BoardViewer$fetchBoardInfo(false)
 					};
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_addStream, model1, _p63),
+						_0: A2(_user$project$BoardViewer$model_addStream, model1, _p62),
 						_1: _user$project$BoardViewer$fetchBoardInfo(false)
 					};
 				}
@@ -11646,42 +16970,50 @@ var _user$project$BoardViewer$update = F2(
 									_elm_lang$core$Basics_ops['++'],
 									model1.errorMessages,
 									_elm_lang$core$Native_List.fromArray(
-										[_p61._0])))
+										[_p60._0])))
 						}),
 					_1: _user$project$BoardViewer$fetchBoardInfo(
 						_elm_lang$core$Basics$not(model1.isInitializated))
 				};
 			case 'MsgAdvanceRealTime':
-				var _p66 = _p61._0;
-				var _p64 = model1.simulationIsStarted;
-				if (_p64 === false) {
-					var _p65 = model1.isInitializated;
-					if (_p65 === true) {
+				var _p65 = _p60._0;
+				var _p63 = model1.simulationIsStarted;
+				if (_p63 === false) {
+					var _p64 = model1.isInitializated;
+					if (_p64 === true) {
 						return {
 							ctor: '_Tuple2',
 							_0: _elm_lang$core$Native_Utils.update(
 								model1,
-								{streamingLeft: model1.streamingLeft - _p66}),
+								{streamingLeft: model1.streamingLeft - _p65}),
 							_1: _elm_lang$core$Platform_Cmd$none
 						};
 					} else {
-						return {ctor: '_Tuple2', _0: model1, _1: _elm_lang$core$Platform_Cmd$none};
+						return {
+							ctor: '_Tuple2',
+							_0: _elm_lang$core$Native_Utils.update(
+								model1,
+								{preStreaming: model1.preStreaming + _p65}),
+							_1: _elm_lang$core$Platform_Cmd$none
+						};
 					}
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_advance, model1, _p66),
+						_0: A2(_user$project$BoardViewer$model_advance, model1, _p65),
 						_1: _elm_lang$core$Platform_Cmd$none
 					};
 				}
-			default:
+			case 'MsgWindowSize':
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model1,
-						{windowSize: _p61._0}),
+						{windowSize: _p60._0}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
+			default:
+				return A2(_debois$elm_mdl$Material$update, _p60._0, model1);
 		}
 	});
 var _user$project$BoardViewer$MsgAdvanceRealTime = function (a) {

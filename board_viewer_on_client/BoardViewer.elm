@@ -32,6 +32,12 @@ import Task as Task
 import Platform.Cmd as Cmd
 import Http
 
+import Material
+import Material.Scheme
+import Material.Options exposing (css)
+import Material.Progress exposing (progress)
+import Material.Grid as Grid
+
 -- ----------------------
 -- Utils Functions
 
@@ -245,7 +251,14 @@ type alias Model = {
 
     , windowSize : W.Size
 
+    , preStreaming : Seconds
+    -- ^ how many seconds are passed in the pre-streaming phase (waiting data)
+
+    , streamingTot : Seconds
+    -- ^ total seconds required for the streaming, excluded the `preStreaming` phase.
+
     , streamingLeft : Seconds
+    -- ^ in the streaming phase how many seconds are left
 
     , simulationIsStarted : Bool
     -- ^ False during initial phases of the simulation when data must be streamed
@@ -280,6 +293,8 @@ type alias Model = {
 
     , totSeconds : Seconds
 
+    , mdl : Material.Model
+
     }
 
 boardInfo_fromRealTimeToSimulatedTime : BoardInfo -> Seconds -> Float
@@ -307,7 +322,9 @@ init =
     let m = {
           isInitializated = False
         , windowSize = { width = 0, height = 0 }
-        , streamingLeft = 0
+        , preStreaming = 0.0
+        , streamingTot = 0.0
+        , streamingLeft = 0.0
         , simulationIsStarted = False
         , boardInfo = Nothing
         , streamedBoardInfo = Dict.empty
@@ -319,6 +336,7 @@ init =
         , errorMessages = []
         , totRedrawFrames = 0
         , totSeconds = 0.0
+        , mdl = Material.model
         }
 
         askWindowSize =
@@ -350,6 +368,7 @@ type Msg =
   | MsgInitBoard
   | MsgStreamBoardInfo BoardInfo
   | MsgWindowSize W.Size
+  | Mdl (Material.Msg Msg)
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
@@ -375,11 +394,13 @@ update msg model1 =
         MsgAdvanceRealTime s ->
             case model1.simulationIsStarted of
                 False -> case model1.isInitializated of
-                             True -> ({model1 | streamingLeft = model1.streamingLeft - s }, Cmd.none)
-                             False -> (model1, Cmd.none)
+                             True ->  ({model1 | streamingLeft = model1.streamingLeft - s }, Cmd.none)
+                             False -> ({ model1 | preStreaming = model1.preStreaming + s}, Cmd.none)
                 True -> (model_advance model1 s, Cmd.none)
 
-        MsgWindowSize s -> ({ model1 | windowSize = s }, Cmd.none) 
+        MsgWindowSize s -> ({ model1 | windowSize = s }, Cmd.none)
+
+        Mdl msg' -> Material.update msg' model1
 
 fetchBoardInfo : Bool -> Cmd Msg
 fetchBoardInfo isInit =
@@ -394,8 +415,11 @@ model_init m1 bi =
                 (ECreateRobot _) -> model_processEvent m e
                 _ -> m
 
+        ts = bi.streamDelay * 2.0
+
         m2 = {m1 | isInitializated = True
-                 , streamingLeft = bi.streamDelay * 2
+                 , streamingLeft = ts
+                 , streamingTot = ts
                  , boardInfo = Just bi
                  , currentSimulationTime = bi.startTime
              }
@@ -784,6 +808,8 @@ model_addRobotEvents model =
 -- ----------------------------------------
 -- From Model to View 
 
+type alias Mdl = Material.Model
+
 -- | The view entry point.
 view : Model -> Html.Html Msg
 view model = 
@@ -794,13 +820,32 @@ view model =
 
     in if model.simulationIsStarted && isThereBoardSize && isThereBoard then viewContent model else viewStreaming model
 
+
 -- | Display the initial streaming message.
 viewStreaming : Model -> Html.Html Msg
 viewStreaming model =
-    case model.isInitializated of
-        False -> Html.p [] []
-        True -> Html.p [] [Html.text ("Streaming: " ++ toString model.streamingLeft ++ "s")]
+  let 
 
+      calcPerc : Float -> Float -> Float -> Float
+      calcPerc completed total totalPerc = completed * totalPerc / (total * totalPerc / 100.0)
+
+      completitionPerc : Bool -> Float
+      completitionPerc isPrestreaming =
+          if isPrestreaming
+          then calcPerc model.preStreaming 3.0 33
+          -- NOTE: consider that the mean pre streaming phase require 3 seconds,
+          -- and it is long the 33% of the total time
+          else let preStreamingPerc = completitionPerc True
+                   leftPerc = 100.0 - preStreamingPerc
+                   streamingPerc = calcPerc (model.streamingTot - model.streamingLeft) model.streamingTot leftPerc
+               in streamingPerc + preStreamingPerc
+
+      perc = Basics.min 100.0 (completitionPerc (not (model.isInitializated)))
+
+  in Grid.grid
+      []
+      [ Grid.cell [Grid.size Grid.All 4] [ progress perc]
+      ]
 
 -- | Display the game board.
 --   NOTE: the majority of screen have more horizontal space than vertical,
