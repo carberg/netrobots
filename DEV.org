@@ -1,35 +1,34 @@
 * Development Notes 
-
-IMPORTANT: The application is in development/alpha phase. 
+** Status
+The application is in alpha/beta phase: all the main features are complete, but they are not completely tested, and there are various improvements to do. 
 ** Design Overview
 The REST API for controlling the Robots in the arena, is written in Swagger YAML format, and then low-level code is generated for each supported programming language. See `doc/rest_api.yaml` and `dev_scripts/` directory.
 
 The server is written in Python using the Tornado HTTP server/framework. See `server` directory.
 
 The board viewer is written in Elm, and then Java Script code is generated. The board viewer graphics is in SVG.
-
 ** Development Environment
 Up to date Nix is used. The required packages are in `default.nix` files inside each directory.
 
 TODO support also Docker
-
 ** Game Server 
-TODO adapt the README of the application
-TODO create a standard Setupy.py file and study the Pip.py approach, because up to date development is done using nix
+TODO create a standard Setupy.py file and study the Pip.py approach, because up to date development is done using Nix
+TOOD support Docker:
+- TODO create Docker build
+- TODO document how to use it
+TODO support remote secure gaming environments
+
+TODO use a ticket that is an integer multiple of the turn
+TODO show server version number
+TODO show the API version number
+TODO compress events to remote board viewers, because they are not so small (45kb every 5 seconds)
+TODO the server is not fast: profile and search what are the slow functions
+TODO make sure of sending compressed js files
 
 *** Versioning
 TODO use the version info in `doc/rest_api.yaml` for:
 - a client check if the REST API has the expected version
 - showing the server version in the home page
-
-*** TODO Installation inside a Docker container
-A Docker containers with the game server can be used for:
-- creating reliable builds
-- isolating the server from the hosting system
-
-TODO up to date there is no Dockerfile and associated documentation
-TODO create the Dockerfile
-TODO document how to create a container and expose the game server ports to the external
 
 *** Network and Game Server Tuning 
 MAYBE move these notes on README file
@@ -39,10 +38,6 @@ The tunings are:
 - network latency: the time required for a client robot to receive the new board status, and sending a new command to the remote server
  
 The server can be configured for using a virtual simulation time, and a physical (real-world) network latency. The latency can be callibrated according the latency of the slowest client.
-
-TODO add tools for informing users of the latency of network, and if there are robots loosing some turn 
-TODO show the lost turn in the board game view
-TODO show in the board game view the server params
 
 ** Game Board Viewer Design
 *** Server Client Communication
@@ -67,37 +62,17 @@ Server sends events in chunks and streamed.
 - competitive in performances respect common JavaScript reactive libraries
 
 *** TODO Various Improvements
-
-TODO improve layout of the grid and info section
-
 TODO show robot configurations on a table
-
-TODO make sure of sending compressed js files
-
-TODO port the code of the sniper from examples directory
-TODO remove old examples directory
-
-TODO sniper continue firing after the first stop
+TODO sniper fires at an high frequency 
 TODO cannonReloadingTime is
 How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
 but it does not seem respected!
-
 MAYBE clip explosions, missiles and so on inside the board
-
-TODO points lost on collision seems excessive
-
 MAYBE dead robots must remain in the leggend with their points and the time they lived
-
-TODO use a ticket that is an integer multiple of the turn
-
-TODO show server version number
-TODO show the API version number
-
-TODO compress events to remote board viewers, because they are not so small (45kb every 5 seconds)
-
-TODO the server is not fast: profile and search what are the slow functions
-
+TODO points lost on collision seems excessive
 ** Client Robots
+TODO port the code of the sniper from examples directory
+TODO remove old examples directory
 
 *** Haskell Robot
 TODO include the FRP framework version into this projet
@@ -125,6 +100,4 @@ The method
 make an estimate of the robot characteristics, and it filter out Robots that are too much strong.
 
 With time and experience, this method should be improved, for avoiding Robot with unfair advantages.
-* WebSite
-TODO add in the README of GitHub a screenshoot of the game.
 

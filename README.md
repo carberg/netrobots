@@ -1,9 +1,18 @@
 NetRobots
 =========
 
-Fighting robots controlled by code.
+Robots fighthing in a virtual arena, and controlled by a REST API, so they can be written in any programming language, and they can be remote. 
 
-Up to date it is in alpha/development state. See `DEV.org` file for more info on application design, and missing features.
+The API is described in an human readable Swagger format in `doc/rest_api.yaml` file and `doc/README.md` file.
+
+![screenshot](/doc/screenshot_1.jpg)
+
+Status
+======
+
+Up to date it is in alpha/beta state. All the important features are implemented, but it is not well tested, and various refinements must be done. 
+
+See `DEV.org` file for more info.
 
 Installation
 ============
@@ -25,15 +34,15 @@ The server can be launched manually using this params:
 
     python run.py
 
-    run.py options:
+    options:
 
-      --board-x-size                   (default 1000)
-      --board-y-size                   (default 1000)
-      --game-tick                      The virtual simulation time in seconds,
+      --board-x-size=number            (default 1000)
+      --board-y-size=number            (default 1000)
+      --game-tick=number               The virtual simulation time in seconds,
                                        between two consecutive robot commands.
                                        (default 0.25)
-      --network-latency                The network latency in seconds. (default 0.100)
-      --run                            run the server on the specified http port
+      --network-latency=number         The network latency in seconds. (default 0.100)
+      --run=port                       run the server on the specified http port
 
 See `demo_scripts/run-demo.sh` for an example of how launching demo clients.
 
@@ -55,16 +64,6 @@ The demo are launched in this way:
 The server can be launched in this way, from the base directory: 
 
     nix-shell default.nix --run "python run.py"
-
-Robots Coding Instructions
-==========================
-
-Robots are controlled by a REST API, so 
-
-* they can be written in any programming language
-* there can be remote robots 
-
-The API is described in an human readable Swagger format in `doc/rest_api.yaml` file. Code for different programming languages, is derived from this file, using the tools in `dev_scripts`. In the `robot_examples` directory there are demo robots for different programming languages.
 
 Project Development
 ===================
