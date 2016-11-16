@@ -111,7 +111,6 @@ TODO the home page should be:
 - TODO include a link to the REST API in dynamic html format
 
 ** Client Robots
-TODO when the server send an error message into http the Python client library start an infinite loop and uses 100% of CPU resources
 
 *** Haskell Robot
 TODO include the FRP framework version into this projet

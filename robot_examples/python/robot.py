@@ -175,11 +175,8 @@ def run_robot_rabbit(serverAddress, robotName):
     maxX = maxX - borderX
     maxY = maxY - borderY
 
-    isAlive = True
-    while isAlive:
-        if not robot.get_status().is_dead:
-            robot.goto(float(randint(int(borderX), int(maxX))), float(randint(int(borderY), int(maxY))))
-
+    while not robot.get_status().is_dead:
+        robot.goto(float(randint(int(borderX), int(maxX))), float(randint(int(borderY), int(maxY))))
 
 def run_robot_sniper(serverAddress, robotName):
 

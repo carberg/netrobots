@@ -2,10 +2,7 @@
 
 cd ..
 
-#
-# Run server with default configurations,
-# and launch some demo robots.
-#
+# Run server with default configurations.
 
 LOG_FILE=netrobots.log
 KILL_FILE=kill-server.sh
@@ -16,9 +13,7 @@ chmod u+x demo_scripts/kill-server.sh
 echo "Execute $KILL_FILE for killing the NetRobots server."
 echo "Server logs are in $LOG_FILE"
 
-#
 # Launch the demo robots.
-#
 
 sleep 2
 xdg-open http://localhost:8888 &

@@ -15745,7 +15745,7 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 									_elm_lang$core$Native_List.fromArray(
 										[
 											_elm_lang$svg$Svg$text(
-											_user$project$BoardViewer$niceFloat(_p12.robot.health))
+											_user$project$BoardViewer$niceFloat(_p12.robot.points))
 										])),
 									A2(
 									_debois$elm_mdl$Material_Table$td,
@@ -15754,7 +15754,7 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 									_elm_lang$core$Native_List.fromArray(
 										[
 											_elm_lang$svg$Svg$text(
-											_user$project$BoardViewer$niceFloat(_p12.robot.points))
+											_user$project$BoardViewer$niceFloat(_p12.robot.health))
 										]))
 								]));
 					},
