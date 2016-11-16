@@ -13848,6 +13848,201 @@ var _debois$elm_mdl$Material_Scheme$top = function (content) {
 	return A3(_debois$elm_mdl$Material_Scheme$topWithScheme, _debois$elm_mdl$Material_Color$Grey, _debois$elm_mdl$Material_Color$Grey, content);
 };
 
+var _debois$elm_mdl$Material_Table$defaultCell = {numeric: false};
+var _debois$elm_mdl$Material_Table$td = F2(
+	function (options, html) {
+		var _p0 = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Table$defaultCell, options);
+		var summary = _p0;
+		var config = _p0.config;
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$td,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					config.numeric ? _debois$elm_mdl$Material_Options$nop : _debois$elm_mdl$Material_Options$cs('mdl-data-table__cell--non-numeric')
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			html);
+	});
+var _debois$elm_mdl$Material_Table$onClick = function (x) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (options) {
+			return _elm_lang$core$Native_Utils.update(
+				options,
+				{
+					onClick: _elm_lang$core$Maybe$Just(
+						_elm_lang$html$Html_Events$onClick(x))
+				});
+		});
+};
+var _debois$elm_mdl$Material_Table$sorted = function (order) {
+	return _debois$elm_mdl$Material_Options$set(
+		function (self) {
+			return _elm_lang$core$Native_Utils.update(
+				self,
+				{
+					sorted: _elm_lang$core$Maybe$Just(order)
+				});
+		});
+};
+var _debois$elm_mdl$Material_Table$numeric = _debois$elm_mdl$Material_Options$set(
+	function (self) {
+		return _elm_lang$core$Native_Utils.update(
+			self,
+			{numeric: true});
+	});
+var _debois$elm_mdl$Material_Table$defaultHeader = {numeric: false, sorted: _elm_lang$core$Maybe$Nothing, onClick: _elm_lang$core$Maybe$Nothing};
+var _debois$elm_mdl$Material_Table$th = F2(
+	function (options, html) {
+		var _p1 = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Table$defaultHeader, options);
+		var summary = _p1;
+		var config = _p1.config;
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$th,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					config.numeric ? _debois$elm_mdl$Material_Options$nop : _debois$elm_mdl$Material_Options$cs('mdl-data-table__cell--non-numeric'),
+					function () {
+					var _p2 = config.sorted;
+					if (_p2.ctor === 'Just') {
+						if (_p2._0.ctor === 'Ascending') {
+							return _debois$elm_mdl$Material_Options$cs('mdl-data-table__header--sorted-ascending');
+						} else {
+							return _debois$elm_mdl$Material_Options$cs('mdl-data-table__header--sorted-descending');
+						}
+					} else {
+						return _debois$elm_mdl$Material_Options$nop;
+					}
+				}()
+				]),
+			A2(
+				_elm_lang$core$Maybe$withDefault,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				A2(
+					_elm_lang$core$Maybe$map,
+					A2(
+						_elm_lang$core$Basics$flip,
+						F2(
+							function (x, y) {
+								return A2(_elm_lang$core$List_ops['::'], x, y);
+							}),
+						_elm_lang$core$Native_List.fromArray(
+							[])),
+					config.onClick)),
+			html);
+	});
+var _debois$elm_mdl$Material_Table$selected = _debois$elm_mdl$Material_Options$set(
+	function (self) {
+		return _elm_lang$core$Native_Utils.update(
+			self,
+			{selected: true});
+	});
+var _debois$elm_mdl$Material_Table$defaultRow = {selected: false};
+var _debois$elm_mdl$Material_Table$tr = F2(
+	function (options, html) {
+		var _p3 = A2(_debois$elm_mdl$Material_Options$collect, _debois$elm_mdl$Material_Table$defaultRow, options);
+		var summary = _p3;
+		var config = _p3.config;
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$tr,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					config.selected ? _debois$elm_mdl$Material_Options$cs('is-selected') : _debois$elm_mdl$Material_Options$nop
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			html);
+	});
+var _debois$elm_mdl$Material_Table$tfoot = F2(
+	function (options, html) {
+		var summary = A2(
+			_debois$elm_mdl$Material_Options$collect,
+			{},
+			options);
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$tfoot,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			html);
+	});
+var _debois$elm_mdl$Material_Table$tbody = F2(
+	function (options, html) {
+		var summary = A2(
+			_debois$elm_mdl$Material_Options$collect,
+			{},
+			options);
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$tbody,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			html);
+	});
+var _debois$elm_mdl$Material_Table$thead = F2(
+	function (options, html) {
+		var summary = A2(
+			_debois$elm_mdl$Material_Options$collect,
+			{},
+			options);
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$thead,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			html);
+	});
+var _debois$elm_mdl$Material_Table$table = F2(
+	function (options, nodes) {
+		var summary = A2(
+			_debois$elm_mdl$Material_Options$collect,
+			{},
+			options);
+		return A5(
+			_debois$elm_mdl$Material_Options$apply,
+			summary,
+			_elm_lang$html$Html$table,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_debois$elm_mdl$Material_Options$cs('mdl-data-table'),
+					_debois$elm_mdl$Material_Options$cs('mdl-js-data-table'),
+					_debois$elm_mdl$Material_Options$cs('is-upgraded')
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			nodes);
+	});
+var _debois$elm_mdl$Material_Table$Row = function (a) {
+	return {selected: a};
+};
+var _debois$elm_mdl$Material_Table$Header = F3(
+	function (a, b, c) {
+		return {numeric: a, sorted: b, onClick: c};
+	});
+var _debois$elm_mdl$Material_Table$Cell = function (a) {
+	return {numeric: a};
+};
+var _debois$elm_mdl$Material_Table$Descending = {ctor: 'Descending'};
+var _debois$elm_mdl$Material_Table$descending = _debois$elm_mdl$Material_Table$sorted(_debois$elm_mdl$Material_Table$Descending);
+var _debois$elm_mdl$Material_Table$Ascending = {ctor: 'Ascending'};
+var _debois$elm_mdl$Material_Table$ascending = _debois$elm_mdl$Material_Table$sorted(_debois$elm_mdl$Material_Table$Ascending);
+
 var _elm_lang$animation_frame$Native_AnimationFrame = function()
 {
 
@@ -15198,123 +15393,6 @@ var _user$project$BoardViewer$colorGradientDefs = function (colorToId) {
 		},
 		_elm_lang$core$Dict$toList(colorToId));
 };
-var _user$project$BoardViewer$viewInfoSection = function (model) {
-	var viewRobotInfo = function (ecr) {
-		var robotStyle = _elm_lang$html$Html_Attributes$style(
-			_elm_lang$core$Native_List.fromArray(
-				[
-					{ctor: '_Tuple2', _0: 'color', _1: ecr.color}
-				]));
-		var robot = ecr.robot;
-		var robotStatus = A2(
-			_elm_lang$core$Basics_ops['++'],
-			' (',
-			A2(
-				_elm_lang$core$Basics_ops['++'],
-				_elm_lang$core$Basics$toString(
-					_elm_lang$core$Basics$round(robot.points)),
-				A2(
-					_elm_lang$core$Basics_ops['++'],
-					' / ',
-					A2(
-						_elm_lang$core$Basics_ops['++'],
-						_elm_lang$core$Basics$toString(
-							_elm_lang$core$Basics$round(robot.health)),
-						')'))));
-		return _elm_lang$core$Native_List.fromArray(
-			[
-				A2(
-				_elm_lang$html$Html$span,
-				_elm_lang$core$Native_List.fromArray(
-					[robotStyle]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_elm_lang$html$Html$text(ecr.name)
-					])),
-				_elm_lang$html$Html$text(robotStatus)
-			]);
-	};
-	var viewRobotsInfo = _elm_lang$core$Native_List.fromArray(
-		[
-			A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$html$Html$text('Robots (points / health)')
-				])),
-			A2(
-			_elm_lang$html$Html$ul,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			A2(
-				_elm_lang$core$List$map,
-				function (_p2) {
-					var _p3 = _p2;
-					return A2(
-						_elm_lang$html$Html$li,
-						_elm_lang$core$Native_List.fromArray(
-							[]),
-						viewRobotInfo(_p3._1));
-				},
-				_elm_lang$core$Dict$values(model.robotInfo)))
-		]);
-	var fps = _elm_lang$core$Native_Utils.eq(model.totSeconds, 0.0) ? 0.0 : (_elm_lang$core$Basics$toFloat(model.totRedrawFrames) / model.totSeconds);
-	var viewModelDim = _elm_lang$core$Native_List.fromArray(
-		[
-			A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$html$Html$text(
-					A2(
-						_elm_lang$core$Basics_ops['++'],
-						'Sim. Time: ',
-						_elm_lang$core$Basics$toString(
-							_elm_lang$core$Basics$round(model.currentSimulationTime))))
-				])),
-			A2(
-			_elm_lang$html$Html$p,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$html$Html$text(
-					A2(
-						_elm_lang$core$Basics_ops['++'],
-						'FPS: ',
-						_elm_lang$core$Basics$toString(
-							_elm_lang$core$Basics$round(fps))))
-				]))
-		]);
-	var viewErrorMessages = _elm_lang$core$Native_List.fromArray(
-		[
-			A2(
-			_elm_lang$html$Html$ul,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			A2(
-				_elm_lang$core$List$map,
-				function (msg) {
-					return A2(
-						_elm_lang$html$Html$li,
-						_elm_lang$core$Native_List.fromArray(
-							[]),
-						_elm_lang$core$Native_List.fromArray(
-							[
-								_elm_lang$html$Html$text(msg)
-							]));
-				},
-				A2(_elm_lang$core$List$take, 10, model.errorMessages)))
-		]);
-	return A2(
-		_elm_lang$core$Basics_ops['++'],
-		viewRobotsInfo,
-		A2(_elm_lang$core$Basics_ops['++'], viewModelDim, viewErrorMessages));
-};
 var _user$project$BoardViewer$viewStreaming = function (model) {
 	var titleSize = _elm_lang$core$Native_List.fromArray(
 		[
@@ -15373,27 +15451,27 @@ var _user$project$BoardViewer$viewStreaming = function (model) {
 			]));
 };
 var _user$project$BoardViewer$model_loadStreamedData = function (m1) {
-	var _p4 = m1.boardInfo;
-	if (_p4.ctor === 'Nothing') {
-		var _p5 = _elm_lang$core$List$head(
+	var _p2 = m1.boardInfo;
+	if (_p2.ctor === 'Nothing') {
+		var _p3 = _elm_lang$core$List$head(
 			_elm_lang$core$Dict$keys(m1.streamedBoardInfo));
-		if (_p5.ctor === 'Nothing') {
+		if (_p3.ctor === 'Nothing') {
 			return {ctor: '_Tuple2', _0: m1, _1: false};
 		} else {
-			var _p8 = _p5._0;
-			var _p6 = A2(_elm_lang$core$Dict$get, _p8, m1.streamedBoardInfo);
-			if (_p6.ctor === 'Nothing') {
+			var _p6 = _p3._0;
+			var _p4 = A2(_elm_lang$core$Dict$get, _p6, m1.streamedBoardInfo);
+			if (_p4.ctor === 'Nothing') {
 				return {ctor: '_Tuple2', _0: m1, _1: false};
 			} else {
-				var _p7 = _p6._0;
+				var _p5 = _p4._0;
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						m1,
 						{
-							boardInfo: _elm_lang$core$Maybe$Just(_p7),
-							streamedBoardInfo: A2(_elm_lang$core$Dict$remove, _p8, m1.streamedBoardInfo),
-							nextEvents: _p7.events
+							boardInfo: _elm_lang$core$Maybe$Just(_p5),
+							streamedBoardInfo: A2(_elm_lang$core$Dict$remove, _p6, m1.streamedBoardInfo),
+							nextEvents: _p5.events
 						}),
 					_1: true
 				};
@@ -15423,29 +15501,29 @@ var _user$project$BoardViewer$cmd_make = function (msg) {
 };
 var _user$project$BoardViewer$model_fromColorToExplosionGradientId = F2(
 	function (m, c) {
-		var _p9 = A2(_elm_lang$core$Dict$get, c, m.usedRobotColors);
-		if (_p9.ctor === 'Nothing') {
+		var _p7 = A2(_elm_lang$core$Dict$get, c, m.usedRobotColors);
+		if (_p7.ctor === 'Nothing') {
 			return 'red';
 		} else {
 			return A2(
 				_elm_lang$core$Basics_ops['++'],
 				'url(#',
-				A2(_elm_lang$core$Basics_ops['++'], _p9._0, ')'));
+				A2(_elm_lang$core$Basics_ops['++'], _p7._0, ')'));
 		}
 	});
 var _user$project$BoardViewer$model_robotColor = F2(
 	function (m, id) {
-		var _p10 = A2(_elm_lang$core$Dict$get, id, m.robotInfo);
-		if (_p10.ctor === 'Nothing') {
+		var _p8 = A2(_elm_lang$core$Dict$get, id, m.robotInfo);
+		if (_p8.ctor === 'Nothing') {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 305, column: 5},
-					end: {line: 307, column: 29}
+					start: {line: 307, column: 5},
+					end: {line: 309, column: 29}
 				},
-				_p10)('unexpeced error in the code: 1053');
+				_p8)('unexpeced error in the code: 1053');
 		} else {
-			return _p10._0._1.color;
+			return _p8._0._1.color;
 		}
 	});
 var _user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime = F2(
@@ -15585,6 +15663,172 @@ var _user$project$BoardViewer$tankSymbolDef = A2(
 var _user$project$BoardViewer$niceFloat = function (n) {
 	return _elm_lang$core$Basics$toString(
 		_elm_lang$core$Basics$round(n));
+};
+var _user$project$BoardViewer$viewInfoSection = function (model) {
+	var fullSize = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$All, 12)
+		]);
+	var viewRobotsInfo = A2(
+		_debois$elm_mdl$Material_Table$table,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		_elm_lang$core$Native_List.fromArray(
+			[
+				A2(
+				_debois$elm_mdl$Material_Table$thead,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(
+						_debois$elm_mdl$Material_Table$tr,
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						_elm_lang$core$Native_List.fromArray(
+							[
+								A2(
+								_debois$elm_mdl$Material_Table$th,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$svg$Svg$text('Robot')
+									])),
+								A2(
+								_debois$elm_mdl$Material_Table$th,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$svg$Svg$text('Points')
+									])),
+								A2(
+								_debois$elm_mdl$Material_Table$th,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$svg$Svg$text('Health')
+									]))
+							]))
+					])),
+				A2(
+				_debois$elm_mdl$Material_Table$tbody,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
+				A2(
+					_elm_lang$core$List$map,
+					function (_p10) {
+						var _p11 = _p10;
+						var _p12 = _p11._1;
+						return A2(
+							_debois$elm_mdl$Material_Table$tr,
+							_elm_lang$core$Native_List.fromArray(
+								[]),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									A2(
+									_debois$elm_mdl$Material_Table$td,
+									_elm_lang$core$Native_List.fromArray(
+										[
+											A2(_debois$elm_mdl$Material_Options$css, 'color', _p12.color)
+										]),
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg$text(_p12.name)
+										])),
+									A2(
+									_debois$elm_mdl$Material_Table$td,
+									_elm_lang$core$Native_List.fromArray(
+										[_debois$elm_mdl$Material_Table$numeric]),
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg$text(
+											_user$project$BoardViewer$niceFloat(_p12.robot.health))
+										])),
+									A2(
+									_debois$elm_mdl$Material_Table$td,
+									_elm_lang$core$Native_List.fromArray(
+										[_debois$elm_mdl$Material_Table$numeric]),
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg$text(
+											_user$project$BoardViewer$niceFloat(_p12.robot.points))
+										]))
+								]));
+					},
+					_elm_lang$core$Dict$values(model.robotInfo)))
+			]));
+	var fps = _elm_lang$core$Native_Utils.eq(model.totSeconds, 0.0) ? 0.0 : (_elm_lang$core$Basics$toFloat(model.totRedrawFrames) / model.totSeconds);
+	var viewModelDim = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'Sim. Time: ',
+						_elm_lang$core$Basics$toString(
+							_elm_lang$core$Basics$round(model.currentSimulationTime))))
+				])),
+			A2(
+			_elm_lang$html$Html$p,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$html$Html$text(
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						'FPS: ',
+						_elm_lang$core$Basics$toString(
+							_elm_lang$core$Basics$round(fps))))
+				]))
+		]);
+	var viewErrorMessages = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(
+			_elm_lang$html$Html$ul,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			A2(
+				_elm_lang$core$List$map,
+				function (msg) {
+					return A2(
+						_elm_lang$html$Html$li,
+						_elm_lang$core$Native_List.fromArray(
+							[]),
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_elm_lang$html$Html$text(msg)
+							]));
+				},
+				A2(_elm_lang$core$List$take, 10, model.errorMessages)))
+		]);
+	return A2(
+		_debois$elm_mdl$Material_Grid$grid,
+		_elm_lang$core$Native_List.fromArray(
+			[_debois$elm_mdl$Material_Grid$noSpacing]),
+		_elm_lang$core$Native_List.fromArray(
+			[
+				A2(
+				_debois$elm_mdl$Material_Grid$cell,
+				fullSize,
+				_elm_lang$core$Native_List.fromArray(
+					[
+						A2(_user$project$BoardViewer$netRobotsLogo, '100%', '100%')
+					])),
+				A2(
+				_debois$elm_mdl$Material_Grid$cell,
+				fullSize,
+				_elm_lang$core$Native_List.fromArray(
+					[viewRobotsInfo]))
+			]));
 };
 var _user$project$BoardViewer$normalizeUsingPeriod = F2(
 	function (period, v1) {
@@ -15802,37 +16046,37 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 		});
 	var drawActiveEvent = F2(
 		function (results1, be) {
-			var _p12 = be.event;
-			switch (_p12.ctor) {
+			var _p13 = be.event;
+			switch (_p13.ctor) {
 				case 'EDisplayMissile':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawMissile, be.activationTime, _p12._0),
+						A2(drawMissile, be.activationTime, _p13._0),
 						results1);
 				case 'EDisplayRobot':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						drawRobot(_p12._0),
+						drawRobot(_p13._0),
 						results1);
 				case 'EDisplayScan':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawScan, be.activationTime, _p12._0),
+						A2(drawScan, be.activationTime, _p13._0),
 						results1);
 				case 'EDisplayTrack':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawTrack, be.activationTime, _p12._0),
+						A2(drawTrack, be.activationTime, _p13._0),
 						results1);
 				case 'EDisplayExplosion':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawExplosion, be.activationTime, _p12._0),
+						A2(drawExplosion, be.activationTime, _p13._0),
 						results1);
 				case 'EDisplayLostPoints':
 					return A2(
 						_elm_lang$core$List_ops['::'],
-						A2(drawLostPoints, be.activationTime, _p12._0),
+						A2(drawLostPoints, be.activationTime, _p13._0),
 						results1);
 				default:
 					return results1;
@@ -15848,17 +16092,17 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			[]),
 		model.activeEvents);
 	var boardInfo = function () {
-		var _p13 = model.boardInfo;
-		if (_p13.ctor === 'Just') {
-			return _p13._0;
+		var _p14 = model.boardInfo;
+		if (_p14.ctor === 'Just') {
+			return _p14._0;
 		} else {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 948, column: 13},
-					end: {line: 950, column: 63}
+					start: {line: 962, column: 13},
+					end: {line: 964, column: 63}
 				},
-				_p13)('contract not respected');
+				_p14)('contract not respected');
 		}
 	}();
 	var boardMaxX = boardInfo.maxBoardX;
@@ -15901,17 +16145,17 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				{ctor: '_Tuple2', _0: 'justify-content', _1: 'flex-start'}
 			]));
 	var boardInfo = function () {
-		var _p15 = model.boardInfo;
-		if (_p15.ctor === 'Just') {
-			return _p15._0;
+		var _p16 = model.boardInfo;
+		if (_p16.ctor === 'Just') {
+			return _p16._0;
 		} else {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 881, column: 13},
-					end: {line: 883, column: 64}
+					start: {line: 883, column: 13},
+					end: {line: 885, column: 64}
 				},
-				_p15)('contract not respected');
+				_p16)('contract not respected');
 		}
 	}();
 	var svgViewBox = A2(
@@ -15993,13 +16237,16 @@ var _user$project$BoardViewer$viewContent = function (model) {
 					[
 						A2(cssStyle, labelWidth, labelHeight)
 					]),
-				_user$project$BoardViewer$viewInfoSection(model))
+				_elm_lang$core$Native_List.fromArray(
+					[
+						_user$project$BoardViewer$viewInfoSection(model)
+					]))
 			]));
 };
 var _user$project$BoardViewer$view = function (model) {
 	var isThereBoard = function () {
-		var _p17 = model.boardInfo;
-		if (_p17.ctor === 'Nothing') {
+		var _p18 = model.boardInfo;
+		if (_p18.ctor === 'Nothing') {
 			return false;
 		} else {
 			return true;
@@ -16011,10 +16258,10 @@ var _user$project$BoardViewer$view = function (model) {
 };
 var _user$project$BoardViewer$polarToCartesian = F4(
 	function (centerX, centerY, radius, angleInRadians) {
-		var _p18 = _elm_lang$core$Basics$fromPolar(
+		var _p19 = _elm_lang$core$Basics$fromPolar(
 			{ctor: '_Tuple2', _0: radius, _1: angleInRadians});
-		var x = _p18._0;
-		var y = _p18._1;
+		var x = _p19._0;
+		var y = _p19._1;
 		return {ctor: '_Tuple2', _0: x + centerX, _1: y + centerY};
 	});
 var _user$project$BoardViewer$distanceXYXY = F4(
@@ -16054,11 +16301,11 @@ var _user$project$BoardViewer$RobotInfo = function (a) {
 	};
 };
 var _user$project$BoardViewer$robotInfoDecoder = function () {
-	var part2 = function (_p19) {
-		var _p20 = _p19;
+	var part2 = function (_p20) {
+		var _p21 = _p20;
 		return A7(
 			_elm_lang$core$Json_Decode$object6,
-			A4(_user$project$BoardViewer$RobotInfo, _p20._0, _p20._1, _p20._2, _p20._3),
+			A4(_user$project$BoardViewer$RobotInfo, _p21._0, _p21._1, _p21._2, _p21._3),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'currentSpeed', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'requiredSpeed', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'acceleration', _elm_lang$core$Json_Decode$float),
@@ -16227,18 +16474,18 @@ var _user$project$BoardViewer$model_processEvent = F2(
 					_elm_lang$core$Basics$degrees(scan.semiaperture)));
 			var directionRad = _user$project$BoardViewer$normalizeRad(
 				_elm_lang$core$Basics$degrees(scan.direction));
-			var _p21 = {
+			var _p22 = {
 				ctor: '_Tuple2',
 				_0: _user$project$BoardViewer$normalizeRad(directionRad - semiapertureRad),
 				_1: _user$project$BoardViewer$normalizeRad(directionRad + semiapertureRad)
 			};
-			var startAngleRad = _p21._0;
-			var endAngleRad = _p21._1;
+			var startAngleRad = _p22._0;
+			var endAngleRad = _p22._1;
 			var centerY = scan.robot.posY;
 			var centerX = scan.robot.posX;
-			var _p22 = function () {
-				var _p23 = scan.hitRobot;
-				if (_p23.ctor === 'Nothing') {
+			var _p23 = function () {
+				var _p24 = scan.hitRobot;
+				if (_p24.ctor === 'Nothing') {
 					return {
 						ctor: '_Tuple4',
 						_0: false,
@@ -16247,31 +16494,31 @@ var _user$project$BoardViewer$model_processEvent = F2(
 						_3: centerY + (scan.scanMaxDistance * _elm_lang$core$Basics$sin(directionRad))
 					};
 				} else {
-					var _p24 = _p23._0;
+					var _p25 = _p24._0;
 					return {
 						ctor: '_Tuple4',
 						_0: true,
-						_1: A4(_user$project$BoardViewer$distanceXYXY, centerX, centerY, _p24.posX, _p24.posY),
-						_2: _p24.posX,
-						_3: _p24.posY
+						_1: A4(_user$project$BoardViewer$distanceXYXY, centerX, centerY, _p25.posX, _p25.posY),
+						_2: _p25.posX,
+						_3: _p25.posY
 					};
 				}
 			}();
-			var hasRecognizedSomething = _p22._0;
-			var distance = _p22._1;
-			var targetX = _p22._2;
-			var targetY = _p22._3;
+			var hasRecognizedSomething = _p23._0;
+			var distance = _p23._1;
+			var targetX = _p23._2;
+			var targetY = _p23._3;
 			var isLimitCase = _elm_lang$core$Native_Utils.cmp(distance, 0.1) < 1;
 			var targetLineColor = hasRecognizedSomething ? 'red' : 'blue';
-			var _p25 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, startAngleRad);
-			var startX = _p25._0;
-			var startY = _p25._1;
-			var _p26 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, endAngleRad);
-			var endX = _p26._0;
-			var endY = _p26._1;
-			var _p27 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, directionRad);
-			var directionX = _p27._0;
-			var directionY = _p27._1;
+			var _p26 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, startAngleRad);
+			var startX = _p26._0;
+			var startY = _p26._1;
+			var _p27 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, endAngleRad);
+			var endX = _p27._0;
+			var endY = _p27._1;
+			var _p28 = A4(_user$project$BoardViewer$polarToCartesian, centerX, centerY, distance, directionRad);
+			var directionX = _p28._0;
+			var directionY = _p28._1;
 			var radarDebugLine = A2(
 				_elm_lang$svg$Svg$g,
 				_elm_lang$core$Native_List.fromArray(
@@ -16473,23 +16720,23 @@ var _user$project$BoardViewer$model_processEvent = F2(
 						{event: e}));
 			});
 		var robotInfo = function (robotId) {
-			var _p28 = A2(_elm_lang$core$Dict$get, robotId, m1.robotInfo);
-			if (_p28.ctor === 'Nothing') {
+			var _p29 = A2(_elm_lang$core$Dict$get, robotId, m1.robotInfo);
+			if (_p29.ctor === 'Nothing') {
 				return _elm_lang$core$Native_Utils.crashCase(
 					'BoardViewer',
 					{
-						start: {line: 539, column: 13},
-						end: {line: 541, column: 28}
+						start: {line: 541, column: 13},
+						end: {line: 543, column: 28}
 					},
-					_p28)('impossible');
+					_p29)('impossible');
 			} else {
-				return _p28._0;
+				return _p29._0;
 			}
 		};
 		var updateRobot = F2(
 			function (m, r) {
-				var _p30 = robotInfo(r.robotId);
-				var ri = _p30._1;
+				var _p31 = robotInfo(r.robotId);
+				var ri = _p31._1;
 				return _elm_lang$core$Native_Utils.update(
 					m,
 					{
@@ -16508,9 +16755,9 @@ var _user$project$BoardViewer$model_processEvent = F2(
 			});
 		var updateMaybeRobot = F2(
 			function (m, mr) {
-				var _p31 = mr;
-				if (_p31.ctor === 'Just') {
-					return A2(updateRobot, m, _p31._0);
+				var _p32 = mr;
+				if (_p32.ctor === 'Just') {
+					return A2(updateRobot, m, _p32._0);
 				} else {
 					return m;
 				}
@@ -16563,21 +16810,21 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				msg: msg
 			};
 		};
-		var _p32 = be.event;
-		switch (_p32.ctor) {
+		var _p33 = be.event;
+		switch (_p33.ctor) {
 			case 'ECreateRobot':
-				var _p33 = _p32._0;
+				var _p34 = _p33._0;
 				return _elm_lang$core$Native_Utils.update(
 					m1,
 					{
 						robotInfo: A3(
 							_elm_lang$core$Dict$insert,
-							_p33.robot.robotId,
-							{ctor: '_Tuple2', _0: be.activationTime, _1: _p33},
+							_p34.robot.robotId,
+							{ctor: '_Tuple2', _0: be.activationTime, _1: _p34},
 							m1.robotInfo),
 						usedRobotColors: A3(
 							_elm_lang$core$Dict$insert,
-							_p33.color,
+							_p34.color,
 							A2(
 								_elm_lang$core$Basics_ops['++'],
 								'id_',
@@ -16590,58 +16837,58 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				return _elm_lang$core$Native_Utils.update(
 					m1,
 					{
-						robotInfo: A2(_elm_lang$core$Dict$remove, _p32._0.robot.robotId, m1.robotInfo)
+						robotInfo: A2(_elm_lang$core$Dict$remove, _p33._0.robot.robotId, m1.robotInfo)
 					});
 			case 'EDrive':
-				return A2(updateRobot, m1, _p32._0.robot);
+				return A2(updateRobot, m1, _p33._0.robot);
 			case 'EScan':
-				var _p34 = _p32._0;
+				var _p35 = _p33._0;
 				return A2(
 					addActiveEvent,
 					A2(
 						updateMaybeRobot,
-						A2(updateRobot, m1, _p34.robot),
-						_p34.hitRobot),
+						A2(updateRobot, m1, _p35.robot),
+						_p35.hitRobot),
 					_user$project$BoardViewer$EDisplayScan(
-						initActiveScan(_p34)));
+						initActiveScan(_p35)));
 			case 'EDisplayScan':
 				return m1;
 			case 'EMissile':
-				var _p35 = _p32._0;
+				var _p36 = _p33._0;
 				return A2(
 					addActiveEvent,
-					A2(updateRobot, m1, _p35.robot),
+					A2(updateRobot, m1, _p36.robot),
 					_user$project$BoardViewer$EDisplayMissile(
-						initActiveMissile(_p35)));
+						initActiveMissile(_p36)));
 			case 'EDisplayMissile':
-				var _p36 = _p32._0;
-				return (_elm_lang$core$Native_Utils.cmp(_p36.deactivationTime, currentTime) < 1) ? A2(
+				var _p37 = _p33._0;
+				return (_elm_lang$core$Native_Utils.cmp(_p37.deactivationTime, currentTime) < 1) ? A2(
 					addActiveEvent,
 					m1,
 					_user$project$BoardViewer$EDisplayExplosion(
-						initActiveExplosion(_p36))) : A2(
+						initActiveExplosion(_p37))) : A2(
 					addActiveEvent,
 					m1,
 					_user$project$BoardViewer$EDisplayMissile(
-						updateActiveMissile(_p36)));
+						updateActiveMissile(_p37)));
 			case 'EDisplayExplosion':
-				return (_elm_lang$core$Native_Utils.cmp(_p32._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
 			case 'EDisplayTrack':
-				return (_elm_lang$core$Native_Utils.cmp(_p32._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
 			case 'EDisplayLostPoints':
-				return (_elm_lang$core$Native_Utils.cmp(_p32._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
+				return (_elm_lang$core$Native_Utils.cmp(_p33._0.deactivationTime, currentTime) < 1) ? m1 : A2(addActiveBoardEvent, m1, be);
 			case 'EExplosion':
-				var _p37 = _p32._0;
-				var m2 = A2(updateRobot, m1, _p37.robot);
-				var m3 = A2(updateRobot, m2, _p37.hitRobot);
+				var _p38 = _p33._0;
+				var m2 = A2(updateRobot, m1, _p38.robot);
+				var m3 = A2(updateRobot, m2, _p38.hitRobot);
 				var m4 = A2(
 					addActiveEvent,
 					m3,
 					_user$project$BoardViewer$EDisplayLostPoints(
-						initActiveLostPoints(_p37)));
+						initActiveLostPoints(_p38)));
 				return m4;
 			case 'ERobotCollision':
-				return A2(updateRobot, m1, _p32._0.robot);
+				return A2(updateRobot, m1, _p33._0.robot);
 			default:
 				return m1;
 		}
@@ -16660,8 +16907,8 @@ var _user$project$BoardViewer$model_init = F2(
 			});
 		var initRobot = F2(
 			function (e, m) {
-				var _p38 = e.event;
-				if (_p38.ctor === 'ECreateRobot') {
+				var _p39 = e.event;
+				if (_p39.ctor === 'ECreateRobot') {
 					return A2(_user$project$BoardViewer$model_processEvent, m, e);
 				} else {
 					return m;
@@ -16688,19 +16935,19 @@ var _user$project$BoardViewer$model_processActiveEvents = function (m1) {
 var _user$project$BoardViewer$model_processNextEvents = function (m1) {
 	model_processNextEvents:
 	while (true) {
-		var _p39 = m1.boardInfo;
-		if (_p39.ctor === 'Nothing') {
+		var _p40 = m1.boardInfo;
+		if (_p40.ctor === 'Nothing') {
 			return m1;
 		} else {
-			var _p40 = _elm_lang$core$List$head(m1.nextEvents);
-			if (_p40.ctor === 'Nothing') {
-				var _p41 = _elm_lang$core$Native_Utils.cmp(m1.currentSimulationTime, _p39._0.endTime) > 0;
-				if (_p41 === true) {
-					var _p42 = _user$project$BoardViewer$model_loadStreamedData(
+			var _p41 = _elm_lang$core$List$head(m1.nextEvents);
+			if (_p41.ctor === 'Nothing') {
+				var _p42 = _elm_lang$core$Native_Utils.cmp(m1.currentSimulationTime, _p40._0.endTime) > 0;
+				if (_p42 === true) {
+					var _p43 = _user$project$BoardViewer$model_loadStreamedData(
 						_elm_lang$core$Native_Utils.update(
 							m1,
 							{boardInfo: _elm_lang$core$Maybe$Nothing}));
-					var m2 = _p42._0;
+					var m2 = _p43._0;
 					var _v20 = m2;
 					m1 = _v20;
 					continue model_processNextEvents;
@@ -16708,25 +16955,25 @@ var _user$project$BoardViewer$model_processNextEvents = function (m1) {
 					return m1;
 				}
 			} else {
-				var _p45 = _p40._0;
-				var _p43 = _elm_lang$core$Native_Utils.cmp(_p45.activationTime, m1.currentSimulationTime) < 1;
-				if (_p43 === false) {
+				var _p46 = _p41._0;
+				var _p44 = _elm_lang$core$Native_Utils.cmp(_p46.activationTime, m1.currentSimulationTime) < 1;
+				if (_p44 === false) {
 					return m1;
 				} else {
 					var m2 = _elm_lang$core$Native_Utils.update(
 						m1,
 						{
 							nextEvents: function () {
-								var _p44 = _elm_lang$core$List$tail(m1.nextEvents);
-								if (_p44.ctor === 'Nothing') {
+								var _p45 = _elm_lang$core$List$tail(m1.nextEvents);
+								if (_p45.ctor === 'Nothing') {
 									return _elm_lang$core$Native_List.fromArray(
 										[]);
 								} else {
-									return _p44._0;
+									return _p45._0;
 								}
 							}()
 						});
-					var m3 = A2(_user$project$BoardViewer$model_processEvent, m2, _p45);
+					var m3 = A2(_user$project$BoardViewer$model_processEvent, m2, _p46);
 					var _v23 = m3;
 					m1 = _v23;
 					continue model_processNextEvents;
@@ -16753,27 +17000,27 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 			cycle(st0),
 			cycle(st1)) < 0) : false;
 	};
-	var processRobot = function (_p46) {
-		var _p47 = _p46;
-		var _p49 = _p47._1;
-		var direction = _p49.robot.direction;
+	var processRobot = function (_p47) {
+		var _p48 = _p47;
+		var _p50 = _p48._1;
+		var direction = _p50.robot.direction;
 		var thereIsMirror = ((_elm_lang$core$Native_Utils.cmp(direction, 0.0) > -1) && (_elm_lang$core$Native_Utils.cmp(direction, 90.0) < 1)) || (_elm_lang$core$Native_Utils.cmp(direction, 270.0) > -1);
-		var robotInfo = _p49.robot;
-		var deltaTimeToRequiredSpeed = (_p49.robot.requiredSpeed - _p49.robot.currentSpeed) / _p49.robot.acceleration;
-		var deltaTime = simulationTime - _p47._0;
-		var _p48 = (_elm_lang$core$Native_Utils.cmp(deltaTime, deltaTimeToRequiredSpeed) > 0) ? {ctor: '_Tuple3', _0: deltaTimeToRequiredSpeed, _1: deltaTime - deltaTimeToRequiredSpeed, _2: 0.0} : {ctor: '_Tuple3', _0: deltaTime, _1: 0, _2: _p49.robot.acceleration};
-		var deltaTimeWithNormalAcceleration = _p48._0;
-		var deltaTimeWithMaxSpeed = _p48._1;
-		var currentAcceleration = _p48._2;
-		var movement1 = (_p49.robot.currentSpeed * deltaTimeWithNormalAcceleration) + ((0.5 * _p49.robot.acceleration) * (deltaTimeWithNormalAcceleration * deltaTimeWithNormalAcceleration));
-		var movement2 = _p49.robot.requiredSpeed * deltaTimeWithMaxSpeed;
+		var robotInfo = _p50.robot;
+		var deltaTimeToRequiredSpeed = (_p50.robot.requiredSpeed - _p50.robot.currentSpeed) / _p50.robot.acceleration;
+		var deltaTime = simulationTime - _p48._0;
+		var _p49 = (_elm_lang$core$Native_Utils.cmp(deltaTime, deltaTimeToRequiredSpeed) > 0) ? {ctor: '_Tuple3', _0: deltaTimeToRequiredSpeed, _1: deltaTime - deltaTimeToRequiredSpeed, _2: 0.0} : {ctor: '_Tuple3', _0: deltaTime, _1: 0, _2: _p50.robot.acceleration};
+		var deltaTimeWithNormalAcceleration = _p49._0;
+		var deltaTimeWithMaxSpeed = _p49._1;
+		var currentAcceleration = _p49._2;
+		var movement1 = (_p50.robot.currentSpeed * deltaTimeWithNormalAcceleration) + ((0.5 * _p50.robot.acceleration) * (deltaTimeWithNormalAcceleration * deltaTimeWithNormalAcceleration));
+		var movement2 = _p50.robot.requiredSpeed * deltaTimeWithMaxSpeed;
 		var movement = movement1 + movement2;
 		var dy = movement * _elm_lang$core$Basics$sin(
-			_elm_lang$core$Basics$degrees(_p49.robot.direction));
-		var posY = _p49.robot.posY + dy;
+			_elm_lang$core$Basics$degrees(_p50.robot.direction));
+		var posY = _p50.robot.posY + dy;
 		var dx = movement * _elm_lang$core$Basics$cos(
-			_elm_lang$core$Basics$degrees(_p49.robot.direction));
-		var posX = _p49.robot.posX + dx;
+			_elm_lang$core$Basics$degrees(_p50.robot.direction));
+		var posX = _p50.robot.posX + dx;
 		var track = {
 			deactivationTime: simulationTime + trackPermanence,
 			lineCords: _elm_lang$core$Native_List.fromArray(
@@ -16786,16 +17033,16 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 					_elm_lang$core$Basics$toString(posX + 1.0)),
 					_elm_lang$svg$Svg_Attributes$y2(
 					_elm_lang$core$Basics$toString(posY + 1.0)),
-					_elm_lang$svg$Svg_Attributes$stroke(_p49.color)
+					_elm_lang$svg$Svg_Attributes$stroke(_p50.color)
 				])
 		};
-		var reloadingTime1 = _p49.robot.reloadingTime - deltaTime;
+		var reloadingTime1 = _p50.robot.reloadingTime - deltaTime;
 		var reloadingTime2 = (_elm_lang$core$Native_Utils.cmp(reloadingTime1, 0.0) < 0) ? 0.0 : reloadingTime1;
 		return {
 			ctor: '_Tuple2',
 			_0: _user$project$BoardViewer$EDisplayRobot(
 				_elm_lang$core$Native_Utils.update(
-					_p49,
+					_p50,
 					{
 						robot: _elm_lang$core$Native_Utils.update(
 							robotInfo,
@@ -16807,21 +17054,21 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 	var finalEvents = A3(
 		_elm_lang$core$Dict$foldl,
 		F3(
-			function (_p51, _p50, events1) {
-				var _p52 = _p50;
-				var _p55 = _p52._0;
-				var deltaTime = simulationTime - _p55;
-				var _p53 = processRobot(
-					{ctor: '_Tuple2', _0: _p55, _1: _p52._1});
-				var robotEvent = _p53._0;
-				var activeTrack = _p53._1;
+			function (_p52, _p51, events1) {
+				var _p53 = _p51;
+				var _p56 = _p53._0;
+				var deltaTime = simulationTime - _p56;
+				var _p54 = processRobot(
+					{ctor: '_Tuple2', _0: _p56, _1: _p53._1});
+				var robotEvent = _p54._0;
+				var activeTrack = _p54._1;
 				var events2 = function () {
-					var _p54 = isTimeToLeaveTheTrack(deltaTime);
-					if (_p54 === true) {
+					var _p55 = isTimeToLeaveTheTrack(deltaTime);
+					if (_p55 === true) {
 						return A2(
 							_elm_lang$core$List_ops['::'],
 							{
-								activationTime: _p55,
+								activationTime: _p56,
 								event: _user$project$BoardViewer$EDisplayTrack(activeTrack)
 							},
 							events1);
@@ -16831,7 +17078,7 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 				}();
 				var events3 = A2(
 					_elm_lang$core$List_ops['::'],
-					{activationTime: _p55, event: robotEvent},
+					{activationTime: _p56, event: robotEvent},
 					events2);
 				return events3;
 			}),
@@ -16844,11 +17091,11 @@ var _user$project$BoardViewer$model_addRobotEvents = function (model) {
 };
 var _user$project$BoardViewer$model_processAllEvents = F2(
 	function (m1, deltaRealTimeSeconds) {
-		var _p56 = m1.boardInfo;
-		if (_p56.ctor === 'Nothing') {
+		var _p57 = m1.boardInfo;
+		if (_p57.ctor === 'Nothing') {
 			return m1;
 		} else {
-			var deltaTime = A2(_user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime, _p56._0, deltaRealTimeSeconds);
+			var deltaTime = A2(_user$project$BoardViewer$boardInfo_fromRealTimeToSimulatedTime, _p57._0, deltaRealTimeSeconds);
 			var m2 = _elm_lang$core$Native_Utils.update(
 				m1,
 				{currentSimulationTime: m1.currentSimulationTime + deltaTime, totRedrawFrames: m1.totRedrawFrames + 1, totSeconds: m1.totSeconds + deltaRealTimeSeconds});
@@ -16860,9 +17107,9 @@ var _user$project$BoardViewer$model_processAllEvents = F2(
 	});
 var _user$project$BoardViewer$model_advance = F2(
 	function (m1, deltaRealTimeSeconds) {
-		var _p57 = _user$project$BoardViewer$model_loadStreamedData(m1);
-		var m2 = _p57._0;
-		var canProcess = _p57._1;
+		var _p58 = _user$project$BoardViewer$model_loadStreamedData(m1);
+		var m2 = _p58._0;
+		var canProcess = _p58._1;
 		return canProcess ? A2(_user$project$BoardViewer$model_processAllEvents, m2, deltaRealTimeSeconds) : m2;
 	});
 var _user$project$BoardViewer$EDrive = function (a) {
@@ -16887,8 +17134,8 @@ var _user$project$BoardViewer$ECreateRobot = function (a) {
 	return {ctor: 'ECreateRobot', _0: a};
 };
 var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
-	var _p58 = eventType;
-	switch (_p58) {
+	var _p59 = eventType;
+	switch (_p59) {
 		case 1:
 			return A2(_elm_lang$core$Json_Decode$map, _user$project$BoardViewer$ECreateRobot, _user$project$BoardViewer$eventCreateRobotDecoder);
 		case 2:
@@ -16907,10 +17154,10 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1270, column: 5},
-					end: {line: 1278, column: 76}
+					start: {line: 1284, column: 5},
+					end: {line: 1292, column: 76}
 				},
-				_p58)(
+				_p59)(
 				A2(
 					_elm_lang$core$Basics_ops['++'],
 					'Unknown eventType tag ',
@@ -17012,8 +17259,8 @@ var _user$project$BoardViewer$fetchBoardInfo = function (isInit) {
 };
 var _user$project$BoardViewer$update = F2(
 	function (msg, model1) {
-		var _p60 = msg;
-		switch (_p60.ctor) {
+		var _p61 = msg;
+		switch (_p61.ctor) {
 			case 'MsgInitBoard':
 				return {
 					ctor: '_Tuple2',
@@ -17021,18 +17268,18 @@ var _user$project$BoardViewer$update = F2(
 					_1: _user$project$BoardViewer$fetchBoardInfo(true)
 				};
 			case 'MsgStreamBoardInfo':
-				var _p62 = _p60._0;
-				var _p61 = model1.isInitializated;
-				if (_p61 === false) {
+				var _p63 = _p61._0;
+				var _p62 = model1.isInitializated;
+				if (_p62 === false) {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_init, model1, _p62),
+						_0: A2(_user$project$BoardViewer$model_init, model1, _p63),
 						_1: _user$project$BoardViewer$fetchBoardInfo(false)
 					};
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_addStream, model1, _p62),
+						_0: A2(_user$project$BoardViewer$model_addStream, model1, _p63),
 						_1: _user$project$BoardViewer$fetchBoardInfo(false)
 					};
 				}
@@ -17049,22 +17296,22 @@ var _user$project$BoardViewer$update = F2(
 									_elm_lang$core$Basics_ops['++'],
 									model1.errorMessages,
 									_elm_lang$core$Native_List.fromArray(
-										[_p60._0])))
+										[_p61._0])))
 						}),
 					_1: _user$project$BoardViewer$fetchBoardInfo(
 						_elm_lang$core$Basics$not(model1.isInitializated))
 				};
 			case 'MsgAdvanceRealTime':
-				var _p65 = _p60._0;
-				var _p63 = model1.simulationIsStarted;
-				if (_p63 === false) {
-					var _p64 = model1.isInitializated;
-					if (_p64 === true) {
+				var _p66 = _p61._0;
+				var _p64 = model1.simulationIsStarted;
+				if (_p64 === false) {
+					var _p65 = model1.isInitializated;
+					if (_p65 === true) {
 						return {
 							ctor: '_Tuple2',
 							_0: _elm_lang$core$Native_Utils.update(
 								model1,
-								{streamingLeft: model1.streamingLeft - _p65}),
+								{streamingLeft: model1.streamingLeft - _p66}),
 							_1: _elm_lang$core$Platform_Cmd$none
 						};
 					} else {
@@ -17072,14 +17319,14 @@ var _user$project$BoardViewer$update = F2(
 							ctor: '_Tuple2',
 							_0: _elm_lang$core$Native_Utils.update(
 								model1,
-								{preStreaming: model1.preStreaming + _p65}),
+								{preStreaming: model1.preStreaming + _p66}),
 							_1: _elm_lang$core$Platform_Cmd$none
 						};
 					}
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_user$project$BoardViewer$model_advance, model1, _p65),
+						_0: A2(_user$project$BoardViewer$model_advance, model1, _p66),
 						_1: _elm_lang$core$Platform_Cmd$none
 					};
 				}
@@ -17088,11 +17335,11 @@ var _user$project$BoardViewer$update = F2(
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model1,
-						{windowSize: _p60._0}),
+						{windowSize: _p61._0}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
 			default:
-				return A2(_debois$elm_mdl$Material$update, _p60._0, model1);
+				return A2(_debois$elm_mdl$Material$update, _p61._0, model1);
 		}
 	});
 var _user$project$BoardViewer$MsgAdvanceRealTime = function (a) {

@@ -37,6 +37,8 @@ import Material.Scheme
 import Material.Options exposing (css)
 import Material.Progress exposing (progress)
 import Material.Grid as Grid
+import Material.Table as Table
+import Material.Tabs as Tabs
 
 -- ----------------------
 -- Utils Functions
@@ -909,11 +911,11 @@ viewContent model =
                        , viewBox svgViewBox
                        ] (viewBoard model)
                    ]
-              , Html.div [cssStyle labelWidth labelHeight] (viewInfoSection model)
+              , Html.div [cssStyle labelWidth labelHeight] [viewInfoSection model]
         ]
 
 -- | Show game info.
-viewInfoSection : Model -> List (Html.Html Msg)
+viewInfoSection : Model -> Html.Html Msg
 viewInfoSection model =
     let 
         viewErrorMessages =
@@ -927,19 +929,31 @@ viewInfoSection model =
         fps = if model.totSeconds == 0.0 then 0.0 else (toFloat model.totRedrawFrames) / model.totSeconds
 
         viewRobotsInfo =
-          [ Html.p [] [Html.text "Robots (points / health)"]
-          , Html.ul [] (List.map (\(_, ecr) -> Html.li [] (viewRobotInfo ecr)) (Dict.values model.robotInfo))]
+            Table.table [] [
+               Table.thead []
+                  [ Table.tr []
+                        [ Table.th [ ] [ text "Robot" ]
+                        , Table.th [ ] [ text "Points" ]
+                        , Table.th [ ] [ text "Health" ]
+                        ]
+                  ]
+             , Table.tbody []
+                ((Dict.values model.robotInfo) |> List.map (\(_, ecr) ->
+                                       Table.tr []
+                                       [ Table.td [ css "color" ecr.color] [ text ecr.name ]
+                                       , Table.td [ Table.numeric ] [ text (niceFloat ecr.robot.points) ]
+                                       , Table.td [ Table.numeric ] [ text (niceFloat ecr.robot.health) ]
+                                       ]))
+            ]
 
-        viewRobotInfo : EventCreateRobot -> List (Html.Html Msg)
-        viewRobotInfo ecr =
-            let robot = ecr.robot
-                robotStatus = " (" ++ (robot.points |> round |> toString) ++ " / " ++ (robot.health |> round |> toString) ++ ")"
-                robotStyle = Html.style [("color", ecr.color)]
-            in  [Html.span [robotStyle] [Html.text ecr.name]
-                ,Html.text (robotStatus)]
+        fullSize = [ Grid.size Grid.All 12 ]
 
+    in Grid.grid
+            [  Grid.noSpacing ]
+            [  Grid.cell fullSize [ netRobotsLogo "100%" "100%"]
+             , Grid.cell fullSize [ viewRobotsInfo ]
+            ]
 
-    in viewRobotsInfo ++ viewModelDim ++ viewErrorMessages
 
 -- | Display Game Board.
 viewBoard : Model -> List (Svg Msg)

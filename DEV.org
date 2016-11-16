@@ -102,6 +102,8 @@ TODO check remanining TODO on the BoardViewer.elm file
 TODO show server version number
 TODO show the API version number
 
+TODO compress events to remote board viewers, because they are not so small (45kb every 5 seconds)
+
 TODO make sure that killed robots or robots with errors does not steal all the resources
 
 TODO the home page should be:
