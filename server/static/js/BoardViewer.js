@@ -14863,6 +14863,66 @@ var _evancz$elm_http$Http$post = F3(
 	});
 
 var _user$project$BoardViewer$jstring = _elm_lang$core$Json_Decode$string;
+var _user$project$BoardViewer$netRobotsLogo = F2(
+	function (w, h) {
+		return A2(
+			_elm_lang$svg$Svg$svg,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$svg$Svg_Attributes$preserveAspectRatio('xMinYMin meet'),
+					_elm_lang$svg$Svg_Attributes$viewBox('0 0 350 75'),
+					_elm_lang$svg$Svg_Attributes$width(w),
+					_elm_lang$svg$Svg_Attributes$height(h)
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_elm_lang$svg$Svg$g,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$svg$Svg_Attributes$style('overflow:hidden; text-anchor: middle; font-size:45; font-weight: bold; font-family: Impact')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							A2(
+							_elm_lang$svg$Svg$text$,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg_Attributes$x('175'),
+									_elm_lang$svg$Svg_Attributes$y('55'),
+									_elm_lang$svg$Svg_Attributes$style('fill: white; stroke: #0f9; stroke-width: 14')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg$text('NetRobots')
+								])),
+							A2(
+							_elm_lang$svg$Svg$text$,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg_Attributes$x('175'),
+									_elm_lang$svg$Svg_Attributes$y('55'),
+									_elm_lang$svg$Svg_Attributes$style('fill: white; stroke: #99f; stroke-width: 8')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg$text('NetRobots')
+								])),
+							A2(
+							_elm_lang$svg$Svg$text$,
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg_Attributes$x('175'),
+									_elm_lang$svg$Svg_Attributes$y('55'),
+									_elm_lang$svg$Svg_Attributes$style('fill: white; stroke: black; stroke-width: 2')
+								]),
+							_elm_lang$core$Native_List.fromArray(
+								[
+									_elm_lang$svg$Svg$text('NetRobots')
+								]))
+						]))
+				]));
+	});
 var _user$project$BoardViewer$missileSymbolDef = A2(
 	_elm_lang$svg$Svg$symbol,
 	_elm_lang$core$Native_List.fromArray(
@@ -15256,6 +15316,14 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 		A2(_elm_lang$core$Basics_ops['++'], viewModelDim, viewErrorMessages));
 };
 var _user$project$BoardViewer$viewStreaming = function (model) {
+	var titleSize = _elm_lang$core$Native_List.fromArray(
+		[
+			A2(_debois$elm_mdl$Material_Grid$offset, _debois$elm_mdl$Material_Grid$Desktop, 3),
+			A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$Desktop, 6),
+			A2(_debois$elm_mdl$Material_Grid$offset, _debois$elm_mdl$Material_Grid$Tablet, 1),
+			A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$Tablet, 6),
+			A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$Phone, 4)
+		]);
 	var calcPerc = F3(
 		function (completed, total, totalPerc) {
 			return (completed * totalPerc) / ((total * totalPerc) / 100.0);
@@ -15276,20 +15344,31 @@ var _user$project$BoardViewer$viewStreaming = function (model) {
 		completitionPerc(
 			_elm_lang$core$Basics$not(model.isInitializated)));
 	return A2(
-		_debois$elm_mdl$Material_Grid$grid,
+		_elm_lang$html$Html$div,
 		_elm_lang$core$Native_List.fromArray(
 			[]),
 		_elm_lang$core$Native_List.fromArray(
 			[
 				A2(
-				_debois$elm_mdl$Material_Grid$cell,
+				_debois$elm_mdl$Material_Grid$grid,
+				_elm_lang$core$Native_List.fromArray(
+					[]),
 				_elm_lang$core$Native_List.fromArray(
 					[
-						A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$All, 4)
-					]),
-				_elm_lang$core$Native_List.fromArray(
-					[
-						_debois$elm_mdl$Material_Progress$progress(perc)
+						A2(
+						_debois$elm_mdl$Material_Grid$cell,
+						titleSize,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								A2(_user$project$BoardViewer$netRobotsLogo, '100%', '100%')
+							])),
+						A2(
+						_debois$elm_mdl$Material_Grid$cell,
+						titleSize,
+						_elm_lang$core$Native_List.fromArray(
+							[
+								_debois$elm_mdl$Material_Progress$progress(perc)
+							]))
 					]))
 			]));
 };
@@ -15776,8 +15855,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 940, column: 13},
-					end: {line: 942, column: 63}
+					start: {line: 948, column: 13},
+					end: {line: 950, column: 63}
 				},
 				_p13)('contract not respected');
 		}
@@ -15829,8 +15908,8 @@ var _user$project$BoardViewer$viewContent = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 873, column: 13},
-					end: {line: 875, column: 64}
+					start: {line: 881, column: 13},
+					end: {line: 883, column: 64}
 				},
 				_p15)('contract not respected');
 		}
@@ -16828,8 +16907,8 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1238, column: 5},
-					end: {line: 1246, column: 76}
+					start: {line: 1270, column: 5},
+					end: {line: 1278, column: 76}
 				},
 				_p58)(
 				A2(

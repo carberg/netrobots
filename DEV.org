@@ -68,11 +68,14 @@ Server sends events in chunks and streamed.
 
 *** TODO Various Improvements
 
-TODO send also complete stats about missing turns of the ROBOTS
+TODO make sure of sending compressed js files
 
-TODO create an initial home-page for the project, the REST-API and so on
+TODO send also complete stats about missing turns of the ROBOTS
+TODO manage the correct real-time time-frame
 TODO include stats with boardinfo about robots missing commands, and so on
 TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
+
+TODO remove server error messages on the shell
 
 TODO port the code of the sniper from examples directory
 TODO remove old examples directory
@@ -81,13 +84,6 @@ TODO sniper continue firing after the first stop
 TODO cannonReloadingTime is
 How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
 but it does not seem respected!
-
-TODO improve the streaming process:
-- TODO before init tell that the board is loading 
-- TODO show initial board
-- TODO show at the center of the board the streaming message, and the remaining time
-
-TODO manage the correct real-time time-frame
 
 MAYBE clip explosions, missiles and so on inside the board
 
@@ -101,19 +97,16 @@ TODO add keyed elements/nodes, for board parts that are subject to frequent add 
 TODO add lazy nodes (if they speedup performances), in particular standard symbols definitions and so on
 TODO use lazy and dynamic nodes, because with paths and so on i generate a lot of points
 
-TODO remove debug lines from scan
-
 TODO check remanining TODO on the BoardViewer.elm file
 
 TODO show server version number
 TODO show the API version number
-TODO show the characteristics of robots on the board
 
-TODO write a better Sniper code
 TODO make sure that killed robots or robots with errors does not steal all the resources
 
-TODO the home-page should include:
-TODO REST-API documentation automatically generated
+TODO the home page should be:
+- TODO more beatiful
+- TODO include a link to the REST API in dynamic html format
 
 ** Client Robots
 TODO when the server send an error message into http the Python client library start an infinite loop and uses 100% of CPU resources

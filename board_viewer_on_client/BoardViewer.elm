@@ -842,10 +842,18 @@ viewStreaming model =
 
       perc = Basics.min 100.0 (completitionPerc (not (model.isInitializated)))
 
-  in Grid.grid
-      []
-      [ Grid.cell [Grid.size Grid.All 4] [ progress perc]
-      ]
+      titleSize = [Grid.offset Grid.Desktop 3, Grid.size Grid.Desktop 6
+                  , Grid.offset Grid.Tablet 1, Grid.size Grid.Tablet 6
+                  , Grid.size Grid.Phone 4]
+
+  in  Html.div []
+        [ 
+          Grid.grid
+            []
+            [  Grid.cell titleSize [ netRobotsLogo "100%" "100%"]
+             , Grid.cell titleSize [ progress perc]
+            ]
+        ]
 
 -- | Display the game board.
 --   NOTE: the majority of screen have more horizontal space than vertical,
@@ -1107,9 +1115,16 @@ tankSymbolDef =
 
             ]
 
+missileWidthEm : Float
 missileWidthEm = 1.5
+
+missileHeightEm : Float 
 missileHeightEm = 1.5
+
+missileWidthPx : Float
 missileWidthPx = 50
+
+missileHeightPx : Float
 missileHeightPx = 28
 
 missileSymbolDef : Svg Msg
@@ -1191,6 +1206,23 @@ missileSymbolDef =
         , strokeWidth "2"
         ] []]]]
 
+netRobotsLogo : String -> String -> Html.Html Msg
+netRobotsLogo w h =
+  Svg.svg [preserveAspectRatio "xMinYMin meet", viewBox "0 0 350 75", width w,  height h] [
+   g [
+      Svg.Attributes.style "overflow:hidden; text-anchor: middle; font-size:45; font-weight: bold; font-family: Impact"] [
+      text' [
+        x "175"
+      , y "55"
+      , Svg.Attributes.style "fill: white; stroke: #0f9; stroke-width: 14"] [Svg.text "NetRobots"]
+    , text' [
+        x "175"
+      , y "55"
+      , Svg.Attributes.style "fill: white; stroke: #99f; stroke-width: 8"] [Svg.text "NetRobots"]
+    , text' [
+        x "175"
+      , y "55"
+      , Svg.Attributes.style "fill: white; stroke: black; stroke-width: 2"] [Svg.text "NetRobots"]]]
 
 -- -------------------------------------------
 -- JSON Decoders

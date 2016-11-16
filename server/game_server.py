@@ -59,10 +59,9 @@ def make_app():
     return tornado.web.Application([
         (r"/robot-create", CreateRobotHandler),
         (r"/robot-action", TurnHandler),
-        (r"/", HomePageHandler),
+        (r"/", BoardViewerPageHandler),
         (r"/board-info", BoardInfoHandler),
         (r"/board-events", BoardEventsHandler),
-        (r"/board.html", BoardViewerPageHandler),
         ], **settings)
 
 def create_game_server(board_size_x, board_size_y, network_latency, simulation_delta_time):
@@ -321,10 +320,6 @@ class CreateRobotHandler(tornado.web.RequestHandler):
 
         else:
             self.send_error(tornado.web.HTTPError(httplib.BAD_REQUEST))
-
-class HomePageHandler(tornado.web.RequestHandler):
-    def get(self):
-        self.render("home.html")
 
 class BoardViewerPageHandler(tornado.web.RequestHandler):
     def get(self):
