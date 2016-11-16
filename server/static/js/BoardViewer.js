@@ -15688,18 +15688,6 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 		[
 			A2(_debois$elm_mdl$Material_Grid$size, _debois$elm_mdl$Material_Grid$All, 12)
 		]);
-	var emptyRow = A2(
-		_debois$elm_mdl$Material_Grid$cell,
-		fullSize,
-		_elm_lang$core$Native_List.fromArray(
-			[
-				A2(
-				_elm_lang$html$Html$p,
-				_elm_lang$core$Native_List.fromArray(
-					[]),
-				_elm_lang$core$Native_List.fromArray(
-					[]))
-			]));
 	var viewRobotsInfo = A2(
 		_debois$elm_mdl$Material_Table$table,
 		_elm_lang$core$Native_List.fromArray(
@@ -15817,8 +15805,8 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 924, column: 14},
-					end: {line: 926, column: 58}
+					start: {line: 946, column: 14},
+					end: {line: 948, column: 58}
 				},
 				_p13)('unexpected error 5757');
 		}
@@ -15996,7 +15984,7 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 	return A2(
 		_debois$elm_mdl$Material_Grid$grid,
 		_elm_lang$core$Native_List.fromArray(
-			[_debois$elm_mdl$Material_Grid$noSpacing]),
+			[]),
 		_elm_lang$core$Native_List.fromArray(
 			[
 				A2(
@@ -16011,7 +15999,6 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 				fullSize,
 				_elm_lang$core$Native_List.fromArray(
 					[viewRobotsInfo])),
-				emptyRow,
 				A2(
 				_debois$elm_mdl$Material_Grid$cell,
 				fullSize,
@@ -16288,8 +16275,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1000, column: 13},
-					end: {line: 1002, column: 63}
+					start: {line: 1019, column: 13},
+					end: {line: 1021, column: 63}
 				},
 				_p16)('contract not respected');
 		}
@@ -16325,30 +16312,6 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				{ctor: '_Tuple2', _0: 'flex-wrap', _1: 'nowrap'},
 				{ctor: '_Tuple2', _0: 'justify-content', _1: 'flex-start'}
 			]));
-	var boardInfo = function () {
-		var _p18 = model.boardInfo;
-		if (_p18.ctor === 'Just') {
-			return _p18._0;
-		} else {
-			return _elm_lang$core$Native_Utils.crashCase(
-				'BoardViewer',
-				{
-					start: {line: 886, column: 13},
-					end: {line: 888, column: 64}
-				},
-				_p18)('contract not respected');
-		}
-	}();
-	var svgViewBox = A2(
-		_elm_lang$core$Basics_ops['++'],
-		'0 0 ',
-		A2(
-			_elm_lang$core$Basics_ops['++'],
-			_elm_lang$core$Basics$toString(boardInfo.maxBoardX),
-			A2(
-				_elm_lang$core$Basics_ops['++'],
-				' ',
-				_elm_lang$core$Basics$toString(boardInfo.maxBoardY))));
 	var toPx = function (n) {
 		return A2(
 			_elm_lang$core$Basics_ops['++'],
@@ -16356,7 +16319,7 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				_elm_lang$core$Basics$truncate(n)),
 			'px');
 	};
-	var cssStyle = F2(
+	var boardCssStyle = F2(
 		function (width, height) {
 			return _elm_lang$html$Html_Attributes$style(
 				_elm_lang$core$Native_List.fromArray(
@@ -16374,14 +16337,61 @@ var _user$project$BoardViewer$viewContent = function (model) {
 						{ctor: '_Tuple2', _0: 'margin', _1: 'auto'}
 					]));
 		});
-	var svgPerc = 0.8;
-	var labelPerc = 1.0 - svgPerc;
-	var verticalBorder = 4.0;
-	var svgWidth = (_elm_lang$core$Basics$toFloat(model.windowSize.width) * svgPerc) - (verticalBorder * 2);
-	var labelWidth = (_elm_lang$core$Basics$toFloat(model.windowSize.width) * labelPerc) - (verticalBorder * 2);
-	var horizontalBorder = 4.0;
-	var svgHeight = _elm_lang$core$Basics$toFloat(model.windowSize.height) - (horizontalBorder * 2);
-	var labelHeight = svgHeight;
+	var infoCssStyle = F2(
+		function (width, height) {
+			return _elm_lang$html$Html_Attributes$style(
+				_elm_lang$core$Native_List.fromArray(
+					[
+						{
+						ctor: '_Tuple2',
+						_0: 'width',
+						_1: toPx(width)
+					},
+						{
+						ctor: '_Tuple2',
+						_0: 'height',
+						_1: toPx(height)
+					},
+						{ctor: '_Tuple2', _0: 'margin', _1: 'auto'},
+						{ctor: '_Tuple2', _0: 'justify-content', _1: 'center'}
+					]));
+		});
+	var verticalBorderPx = 2.0;
+	var wy = _elm_lang$core$Basics$toFloat(model.windowSize.height) - (verticalBorderPx * 2.0);
+	var fy = wy;
+	var ify = wy;
+	var horizontalBorderPx = 2.0;
+	var wx = _elm_lang$core$Basics$toFloat(model.windowSize.width) - (horizontalBorderPx * 2.0);
+	var wr = wx / wy;
+	var boardInfo = function () {
+		var _p18 = model.boardInfo;
+		if (_p18.ctor === 'Just') {
+			return _p18._0;
+		} else {
+			return _elm_lang$core$Native_Utils.crashCase(
+				'BoardViewer',
+				{
+					start: {line: 872, column: 13},
+					end: {line: 874, column: 64}
+				},
+				_p18)('contract not respected');
+		}
+	}();
+	var bx = boardInfo.maxBoardX;
+	var by = boardInfo.maxBoardY;
+	var br = bx / by;
+	var fx = (fy * bx) / by;
+	var ifx = wx - fx;
+	var svgViewBox = A2(
+		_elm_lang$core$Basics_ops['++'],
+		'0 0 ',
+		A2(
+			_elm_lang$core$Basics_ops['++'],
+			_elm_lang$core$Basics$toString(bx),
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				' ',
+				_elm_lang$core$Basics$toString(by))));
 	return A2(
 		_elm_lang$html$Html$div,
 		_elm_lang$core$Native_List.fromArray(
@@ -16392,7 +16402,7 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				_elm_lang$html$Html$div,
 				_elm_lang$core$Native_List.fromArray(
 					[
-						A2(cssStyle, svgWidth, svgHeight)
+						A2(boardCssStyle, fx + (horizontalBorderPx * 2.0), fy + (verticalBorderPx * 2.0))
 					]),
 				_elm_lang$core$Native_List.fromArray(
 					[
@@ -16404,9 +16414,9 @@ var _user$project$BoardViewer$viewContent = function (model) {
 								_elm_lang$svg$Svg_Attributes$x('0'),
 								_elm_lang$svg$Svg_Attributes$y('0'),
 								_elm_lang$svg$Svg_Attributes$width(
-								toPx(svgWidth)),
+								toPx(fx)),
 								_elm_lang$svg$Svg_Attributes$height(
-								toPx(svgHeight)),
+								toPx(fx)),
 								_elm_lang$svg$Svg_Attributes$preserveAspectRatio('xMinYMin meet'),
 								_elm_lang$svg$Svg_Attributes$viewBox(svgViewBox)
 							]),
@@ -16416,7 +16426,7 @@ var _user$project$BoardViewer$viewContent = function (model) {
 				_elm_lang$html$Html$div,
 				_elm_lang$core$Native_List.fromArray(
 					[
-						A2(cssStyle, labelWidth, labelHeight)
+						A2(infoCssStyle, ifx, ify + (verticalBorderPx * 2.0))
 					]),
 				_elm_lang$core$Native_List.fromArray(
 					[
@@ -17338,8 +17348,8 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1328, column: 5},
-					end: {line: 1336, column: 76}
+					start: {line: 1346, column: 5},
+					end: {line: 1354, column: 76}
 				},
 				_p61)(
 				A2(

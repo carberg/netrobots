@@ -862,30 +862,43 @@ viewStreaming model =
 
 -- | Display the game board.
 --   NOTE: the majority of screen have more horizontal space than vertical,
---   and usually boards are square. So the info section on the left uses
---   free screen space.
+--   and usually boards are square, so it is used the screen on the left
+--   for the info section. 
 --   @require model.boardInfo is Just
 viewContent : Model -> Html.Html Msg
 viewContent model =
-    let horizontalBorder = 4.0
-        verticalBorder = 4.0
-        svgPerc = 0.8
-        labelPerc = 1.0 - svgPerc
-        svgWidth = (toFloat model.windowSize.width) * svgPerc - verticalBorder * 2
-        svgHeight = (toFloat model.windowSize.height) - horizontalBorder * 2
-        labelWidth = (toFloat model.windowSize.width) * labelPerc - verticalBorder * 2
-        labelHeight = svgHeight
-
-        toPx : Float -> String
-        toPx n = toString (truncate n) ++ "px"
-
-        svgViewBox
-            = "0 0 " ++ (toString boardInfo.maxBoardX) ++ " " ++ (toString boardInfo.maxBoardY)
-
+    let
         boardInfo =
             case model.boardInfo of
                 Just r -> r
                 Nothing -> Debug.crash "contract not respected"
+
+        horizontalBorderPx = 2.0
+        verticalBorderPx = 2.0
+        
+        bx = boardInfo.maxBoardX
+        by = boardInfo.maxBoardY
+
+        wx = (toFloat model.windowSize.width) - horizontalBorderPx * 2.0
+        wy = (toFloat model.windowSize.height) - verticalBorderPx * 2.0
+
+        br : Float
+        br = bx / by
+
+        wr : Float
+        wr = wx / wy
+
+        -- fx / bx = fy / by ==> fx = fy * bx / by
+        fy = wy
+        fx = fy * bx / by
+
+        ifx = wx - fx
+        ify = wy
+
+        toPx : Float -> String
+        toPx n = toString (truncate n) ++ "px"
+
+        svgViewBox = "0 0 " ++ (toString bx) ++ " " ++ (toString by)
 
         containerCssStyle : Attribute Msg
         containerCssStyle = 
@@ -897,24 +910,33 @@ viewContent model =
              ,("justify-content", "flex-start")
              ]
 
-        cssStyle : Float -> Float -> Attribute Msg
-        cssStyle width height  =
+        boardCssStyle : Float -> Float -> Attribute Msg
+        boardCssStyle width height  =
             Html.style [
                  ("width",  toPx width)
                 ,("height", toPx height)
                 ,("margin", "auto")
                 ]
 
+        infoCssStyle : Float -> Float -> Attribute Msg
+        infoCssStyle width height  =
+            Html.style [
+                 ("width",  toPx width)
+                ,("height", toPx height)
+                ,("margin", "auto")
+                ,("justify-content", "center")
+                 ]
+
     in  Html.div [ containerCssStyle ] [
-              Html.div [ cssStyle svgWidth svgHeight ] [
+              Html.div [ boardCssStyle (fx + horizontalBorderPx * 2.0) (fy + verticalBorderPx * 2.0) ] [
                    svg [ version "1.1"
                        , x "0", y "0"
-                       , width (toPx svgWidth), height  (toPx svgHeight)
+                       , width (toPx fx), height  (toPx fx)
                        , preserveAspectRatio "xMinYMin meet"
                        , viewBox svgViewBox
                        ] (viewBoard model)
                    ]
-              , Html.div [cssStyle labelWidth labelHeight] [viewInfoSection model]
+              , Html.div [infoCssStyle ifx (ify + verticalBorderPx * 2.0)] [viewInfoSection model]
         ]
 
 -- | Show game info.
@@ -982,13 +1004,10 @@ viewInfoSection model =
 
         fullSize = [ Grid.size Grid.All 12 ]
 
-        emptyRow = Grid.cell fullSize [ Html.p [] []]
-
     in Grid.grid
-            [  Grid.noSpacing ]
+            [  ]
             [  Grid.cell fullSize [ Svg.lazy2 netRobotsLogo "100%" "100%"]
              , Grid.cell fullSize [ viewRobotsInfo ]
-             , emptyRow
              , Grid.cell fullSize [ viewServerInfo ]
             ]
 

@@ -68,10 +68,10 @@ Server sends events in chunks and streamed.
 
 *** TODO Various Improvements
 
-TODO dispaly info about the board size
-TODO manage the correct real-time time-frame
-TODO show board-size
-TODO show server command rate
+TODO improve layout of the grid and info section
+
+TODO show robot configurations on a table
+
 TODO make sure of sending compressed js files
 
 TODO port the code of the sniper from examples directory
@@ -82,8 +82,6 @@ TODO cannonReloadingTime is
 How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
 but it does not seem respected!
 
-TODO use all the space of the grid on the info section
-
 MAYBE clip explosions, missiles and so on inside the board
 
 TODO points lost on collision seems excessive
@@ -92,18 +90,10 @@ MAYBE dead robots must remain in the leggend with their points and the time they
 
 TODO use a ticket that is an integer multiple of the turn
 
-TODO add keyed elements/nodes, for board parts that are subject to frequent add and remove of node
-TODO add lazy nodes (if they speedup performances), in particular standard symbols definitions and so on
-TODO use lazy and dynamic nodes, because with paths and so on i generate a lot of points
-
-TODO check remanining TODO on the BoardViewer.elm file
-
 TODO show server version number
 TODO show the API version number
 
 TODO compress events to remote board viewers, because they are not so small (45kb every 5 seconds)
-
-TODO make sure that killed robots or robots with errors does not steal all the resources
 
 TODO the server is not fast: profile and search what are the slow functions
 
