@@ -646,6 +646,7 @@ class Robot(RobotStatus):
         self.cannon_reloading_time = 0.0
         self.max_board_x = board.get_size_x()
         self.max_board_y = board.get_size_y()
+        self.missed_turns = 0
 
         self._last_command_executed_at_global_time = 0.0
         self._required_speed = 0.0
@@ -866,6 +867,7 @@ class Robot(RobotStatus):
         r.reloading_time = self.cannon_reloading_time
         r.health = self.health
         r.points = self.points
+        r.missed_turns = self.missed_turns
 
         return r
 

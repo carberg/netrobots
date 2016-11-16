@@ -11,6 +11,7 @@ module Model.RobotStatus
 import Data.Aeson
 import GHC.Generics
 import Test.QuickCheck
+import Model.Number
 import Model.RobotConfiguration
 import Model.ScanStatus
 
@@ -22,6 +23,7 @@ data RobotStatus = RobotStatus
     , simulationTime :: Float
     , timeTick :: Float
     , realTimeTick :: Float
+    , missedTurns :: Number
     , points :: Float
     , health :: Float
     , isDead :: Bool
@@ -39,4 +41,4 @@ data RobotStatus = RobotStatus
 instance FromJSON RobotStatus
 instance ToJSON RobotStatus
 instance Arbitrary RobotStatus where
-    arbitrary = RobotStatus <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+    arbitrary = RobotStatus <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary

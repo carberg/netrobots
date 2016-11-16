@@ -15518,8 +15518,8 @@ var _user$project$BoardViewer$model_robotColor = F2(
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 307, column: 5},
-					end: {line: 309, column: 29}
+					start: {line: 308, column: 5},
+					end: {line: 310, column: 29}
 				},
 				_p8)('unexpeced error in the code: 1053');
 		} else {
@@ -15710,6 +15710,14 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 								_elm_lang$core$Native_List.fromArray(
 									[
 										_elm_lang$svg$Svg$text('Health')
+									])),
+								A2(
+								_debois$elm_mdl$Material_Table$th,
+								_elm_lang$core$Native_List.fromArray(
+									[]),
+								_elm_lang$core$Native_List.fromArray(
+									[
+										_elm_lang$svg$Svg$text('Missed Turns')
 									]))
 							]))
 					])),
@@ -15755,6 +15763,15 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 										[
 											_elm_lang$svg$Svg$text(
 											_user$project$BoardViewer$niceFloat(_p12.robot.health))
+										])),
+									A2(
+									_debois$elm_mdl$Material_Table$td,
+									_elm_lang$core$Native_List.fromArray(
+										[_debois$elm_mdl$Material_Table$numeric]),
+									_elm_lang$core$Native_List.fromArray(
+										[
+											_elm_lang$svg$Svg$text(
+											_elm_lang$core$Basics$toString(_p12.robot.missedTurns))
 										]))
 								]));
 					},
@@ -16099,8 +16116,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 962, column: 13},
-					end: {line: 964, column: 63}
+					start: {line: 965, column: 13},
+					end: {line: 967, column: 63}
 				},
 				_p14)('contract not respected');
 		}
@@ -16152,8 +16169,8 @@ var _user$project$BoardViewer$viewContent = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 883, column: 13},
-					end: {line: 885, column: 64}
+					start: {line: 884, column: 13},
+					end: {line: 886, column: 64}
 				},
 				_p16)('contract not respected');
 		}
@@ -16289,7 +16306,9 @@ var _user$project$BoardViewer$RobotInfo = function (a) {
 							return function (h) {
 								return function (i) {
 									return function (j) {
-										return {robotId: a, posX: b, posY: c, direction: d, currentSpeed: e, requiredSpeed: f, acceleration: g, reloadingTime: h, health: i, points: j};
+										return function (k) {
+											return {robotId: a, posX: b, posY: c, direction: d, currentSpeed: e, requiredSpeed: f, acceleration: g, reloadingTime: h, health: i, points: j, missedTurns: k};
+										};
 									};
 								};
 							};
@@ -16303,26 +16322,27 @@ var _user$project$BoardViewer$RobotInfo = function (a) {
 var _user$project$BoardViewer$robotInfoDecoder = function () {
 	var part2 = function (_p20) {
 		var _p21 = _p20;
-		return A7(
-			_elm_lang$core$Json_Decode$object6,
-			A4(_user$project$BoardViewer$RobotInfo, _p21._0, _p21._1, _p21._2, _p21._3),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'currentSpeed', _elm_lang$core$Json_Decode$float),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'requiredSpeed', _elm_lang$core$Json_Decode$float),
+		return A6(
+			_elm_lang$core$Json_Decode$object5,
+			A6(_user$project$BoardViewer$RobotInfo, _p21._0, _p21._1, _p21._2, _p21._3, _p21._4, _p21._5),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'acceleration', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'reloadingTime', _elm_lang$core$Json_Decode$float),
 			A2(_elm_lang$core$Json_Decode_ops[':='], 'health', _elm_lang$core$Json_Decode$float),
-			A2(_elm_lang$core$Json_Decode_ops[':='], 'points', _elm_lang$core$Json_Decode$float));
+			A2(_elm_lang$core$Json_Decode_ops[':='], 'points', _elm_lang$core$Json_Decode$float),
+			A2(_elm_lang$core$Json_Decode_ops[':='], 'missedTurns', _elm_lang$core$Json_Decode$int));
 	};
-	var part1 = A5(
-		_elm_lang$core$Json_Decode$object4,
-		F4(
-			function (v0, v1, v2, v3) {
-				return {ctor: '_Tuple4', _0: v0, _1: v1, _2: v2, _3: v3};
+	var part1 = A7(
+		_elm_lang$core$Json_Decode$object6,
+		F6(
+			function (v0, v1, v2, v3, v4, v5) {
+				return {ctor: '_Tuple6', _0: v0, _1: v1, _2: v2, _3: v3, _4: v4, _5: v5};
 			}),
 		A2(_elm_lang$core$Json_Decode_ops[':='], 'robotId', _elm_lang$core$Json_Decode$int),
 		A2(_elm_lang$core$Json_Decode_ops[':='], 'posX', _elm_lang$core$Json_Decode$float),
 		A2(_elm_lang$core$Json_Decode_ops[':='], 'posY', _elm_lang$core$Json_Decode$float),
-		A2(_elm_lang$core$Json_Decode_ops[':='], 'direction', _elm_lang$core$Json_Decode$float));
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'direction', _elm_lang$core$Json_Decode$float),
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'currentSpeed', _elm_lang$core$Json_Decode$float),
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'requiredSpeed', _elm_lang$core$Json_Decode$float));
 	return A2(_elm_lang$core$Json_Decode$andThen, part1, part2);
 }();
 var _user$project$BoardViewer$BoardEvent = F2(
@@ -16725,8 +16745,8 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				return _elm_lang$core$Native_Utils.crashCase(
 					'BoardViewer',
 					{
-						start: {line: 541, column: 13},
-						end: {line: 543, column: 28}
+						start: {line: 542, column: 13},
+						end: {line: 544, column: 28}
 					},
 					_p29)('impossible');
 			} else {
@@ -17154,8 +17174,8 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1284, column: 5},
-					end: {line: 1292, column: 76}
+					start: {line: 1288, column: 5},
+					end: {line: 1296, column: 76}
 				},
 				_p59)(
 				A2(

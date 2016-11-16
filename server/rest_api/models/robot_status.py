@@ -43,6 +43,7 @@ class RobotStatus(object):
             'simulation_time': 'float',
             'time_tick': 'float',
             'real_time_tick': 'float',
+            'missed_turns': 'float',
             'points': 'float',
             'health': 'float',
             'is_dead': 'bool',
@@ -64,6 +65,7 @@ class RobotStatus(object):
             'simulation_time': 'simulationTime',
             'time_tick': 'timeTick',
             'real_time_tick': 'realTimeTick',
+            'missed_turns': 'missedTurns',
             'points': 'points',
             'health': 'health',
             'is_dead': 'isDead',
@@ -84,6 +86,7 @@ class RobotStatus(object):
         self._simulation_time = None
         self._time_tick = None
         self._real_time_tick = None
+        self._missed_turns = None
         self._points = None
         self._health = None
         self._is_dead = None
@@ -167,7 +170,7 @@ class RobotStatus(object):
     def simulation_time(self):
         """
         Gets the simulation_time of this RobotStatus.
-        The current simulation time.
+        The current simulation time, expressed in virtual simulated seconds.
 
         :return: The simulation_time of this RobotStatus.
         :rtype: float
@@ -178,7 +181,7 @@ class RobotStatus(object):
     def simulation_time(self, simulation_time):
         """
         Sets the simulation_time of this RobotStatus.
-        The current simulation time.
+        The current simulation time, expressed in virtual simulated seconds.
 
         :param simulation_time: The simulation_time of this RobotStatus.
         :type: float
@@ -228,6 +231,28 @@ class RobotStatus(object):
         :type: float
         """
         self._real_time_tick = real_time_tick
+
+    @property
+    def missed_turns(self):
+        """
+        Gets the missed_turns of this RobotStatus.
+        0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+
+        :return: The missed_turns of this RobotStatus.
+        :rtype: float
+        """
+        return self._missed_turns
+
+    @missed_turns.setter
+    def missed_turns(self, missed_turns):
+        """
+        Sets the missed_turns of this RobotStatus.
+        0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+
+        :param missed_turns: The missed_turns of this RobotStatus.
+        :type: float
+        """
+        self._missed_turns = missed_turns
 
     @property
     def points(self):

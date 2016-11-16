@@ -36,8 +36,9 @@
    * @param reloadingTime
    * @param health
    * @param points
+   * @param missedTurns
    */
-  var exports = function(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health, points) {
+  var exports = function(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health, points, missedTurns) {
 
     this['robotId'] = robotId;
     this['posX'] = posX;
@@ -49,6 +50,7 @@
     this['reloadingTime'] = reloadingTime;
     this['health'] = health;
     this['points'] = points;
+    this['missedTurns'] = missedTurns;
   };
 
   /**
@@ -92,6 +94,9 @@
       if (data.hasOwnProperty('points')) {
         obj['points'] = ApiClient.convertToType(data['points'], 'Number');
       }
+      if (data.hasOwnProperty('missedTurns')) {
+        obj['missedTurns'] = ApiClient.convertToType(data['missedTurns'], 'Number');
+      }
     }
     return obj;
   }
@@ -103,11 +108,13 @@
   exports.prototype['robotId'] = undefined;
 
   /**
+   * 0 is the left most point of the board.
    * @member {Number} posX
    */
   exports.prototype['posX'] = undefined;
 
   /**
+   * 0 is the upper most point of the board.
    * @member {Number} posY
    */
   exports.prototype['posY'] = undefined;
@@ -150,6 +157,12 @@
    * @member {Number} points
    */
   exports.prototype['points'] = undefined;
+
+  /**
+   * 0 if the robot sent a command for every game turn.
+   * @member {Number} missedTurns
+   */
+  exports.prototype['missedTurns'] = undefined;
 
 
 

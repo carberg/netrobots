@@ -6,6 +6,7 @@ import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import io.swagger.client.model.RobotConfiguration;
 import io.swagger.client.model.ScanStatus;
+import java.math.BigDecimal;
 
 
 
@@ -14,7 +15,7 @@ import io.swagger.client.model.ScanStatus;
  **/
 
 @ApiModel(description = "The current status of the robot.")
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-16T05:09:07.503+01:00")
 public class RobotStatus   {
   
   private String name = null;
@@ -23,6 +24,7 @@ public class RobotStatus   {
   private Float simulationTime = null;
   private Float timeTick = null;
   private Float realTimeTick = null;
+  private BigDecimal missedTurns = null;
   private Float points = null;
   private Float health = null;
   private Boolean isDead = null;
@@ -90,14 +92,14 @@ public class RobotStatus   {
 
   
   /**
-   * The current simulation time.
+   * The current simulation time, expressed in virtual simulated seconds.
    **/
   public RobotStatus simulationTime(Float simulationTime) {
     this.simulationTime = simulationTime;
     return this;
   }
   
-  @ApiModelProperty(example = "null", required = true, value = "The current simulation time.")
+  @ApiModelProperty(example = "null", required = true, value = "The current simulation time, expressed in virtual simulated seconds.")
   @JsonProperty("simulationTime")
   public Float getSimulationTime() {
     return simulationTime;
@@ -140,6 +142,24 @@ public class RobotStatus   {
   }
   public void setRealTimeTick(Float realTimeTick) {
     this.realTimeTick = realTimeTick;
+  }
+
+  
+  /**
+   * 0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+   **/
+  public RobotStatus missedTurns(BigDecimal missedTurns) {
+    this.missedTurns = missedTurns;
+    return this;
+  }
+  
+  @ApiModelProperty(example = "null", required = true, value = "0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.")
+  @JsonProperty("missedTurns")
+  public BigDecimal getMissedTurns() {
+    return missedTurns;
+  }
+  public void setMissedTurns(BigDecimal missedTurns) {
+    this.missedTurns = missedTurns;
   }
 
   
@@ -371,6 +391,7 @@ public class RobotStatus   {
         Objects.equals(this.simulationTime, robotStatus.simulationTime) &&
         Objects.equals(this.timeTick, robotStatus.timeTick) &&
         Objects.equals(this.realTimeTick, robotStatus.realTimeTick) &&
+        Objects.equals(this.missedTurns, robotStatus.missedTurns) &&
         Objects.equals(this.points, robotStatus.points) &&
         Objects.equals(this.health, robotStatus.health) &&
         Objects.equals(this.isDead, robotStatus.isDead) &&
@@ -387,7 +408,7 @@ public class RobotStatus   {
 
   @Override
   public int hashCode() {
-    return Objects.hash(name, token, configuration, simulationTime, timeTick, realTimeTick, points, health, isDead, direction, speed, posX, posY, maxBoardX, maxBoardY, cannonReloadingTime, firedNewMissile, scanStatus);
+    return Objects.hash(name, token, configuration, simulationTime, timeTick, realTimeTick, missedTurns, points, health, isDead, direction, speed, posX, posY, maxBoardX, maxBoardY, cannonReloadingTime, firedNewMissile, scanStatus);
   }
 
   @Override
@@ -401,6 +422,7 @@ public class RobotStatus   {
     sb.append("    simulationTime: ").append(toIndentedString(simulationTime)).append("\n");
     sb.append("    timeTick: ").append(toIndentedString(timeTick)).append("\n");
     sb.append("    realTimeTick: ").append(toIndentedString(realTimeTick)).append("\n");
+    sb.append("    missedTurns: ").append(toIndentedString(missedTurns)).append("\n");
     sb.append("    points: ").append(toIndentedString(points)).append("\n");
     sb.append("    health: ").append(toIndentedString(health)).append("\n");
     sb.append("    isDead: ").append(toIndentedString(isDead)).append("\n");

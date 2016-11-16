@@ -60,7 +60,8 @@ class RobotInfo implements ArrayAccess
         'acceleration' => 'float',
         'reloading_time' => 'float',
         'health' => 'float',
-        'points' => 'float'
+        'points' => 'float',
+        'missed_turns' => 'Number'
     );
   
     static function swaggerTypes() {
@@ -81,7 +82,8 @@ class RobotInfo implements ArrayAccess
         'acceleration' => 'acceleration',
         'reloading_time' => 'reloadingTime',
         'health' => 'health',
-        'points' => 'points'
+        'points' => 'points',
+        'missed_turns' => 'missedTurns'
     );
   
     static function attributeMap() {
@@ -102,7 +104,8 @@ class RobotInfo implements ArrayAccess
         'acceleration' => 'setAcceleration',
         'reloading_time' => 'setReloadingTime',
         'health' => 'setHealth',
-        'points' => 'setPoints'
+        'points' => 'setPoints',
+        'missed_turns' => 'setMissedTurns'
     );
   
     static function setters() {
@@ -123,7 +126,8 @@ class RobotInfo implements ArrayAccess
         'acceleration' => 'getAcceleration',
         'reloading_time' => 'getReloadingTime',
         'health' => 'getHealth',
-        'points' => 'getPoints'
+        'points' => 'getPoints',
+        'missed_turns' => 'getMissedTurns'
     );
   
     static function getters() {
@@ -138,13 +142,13 @@ class RobotInfo implements ArrayAccess
     protected $robot_id;
     
     /**
-      * $pos_x 
+      * $pos_x 0 is the left most point of the board.
       * @var float
       */
     protected $pos_x;
     
     /**
-      * $pos_y 
+      * $pos_y 0 is the upper most point of the board.
       * @var float
       */
     protected $pos_y;
@@ -191,6 +195,12 @@ class RobotInfo implements ArrayAccess
       */
     protected $points;
     
+    /**
+      * $missed_turns 0 if the robot sent a command for every game turn.
+      * @var Number
+      */
+    protected $missed_turns;
+    
 
     /**
      * Constructor
@@ -210,6 +220,7 @@ class RobotInfo implements ArrayAccess
             $this->reloading_time = $data["reloading_time"];
             $this->health = $data["health"];
             $this->points = $data["points"];
+            $this->missed_turns = $data["missed_turns"];
         }
     }
     
@@ -245,7 +256,7 @@ class RobotInfo implements ArrayAccess
   
     /**
      * Sets pos_x
-     * @param float $pos_x 
+     * @param float $pos_x 0 is the left most point of the board.
      * @return $this
      */
     public function setPosX($pos_x)
@@ -266,7 +277,7 @@ class RobotInfo implements ArrayAccess
   
     /**
      * Sets pos_y
-     * @param float $pos_y 
+     * @param float $pos_y 0 is the upper most point of the board.
      * @return $this
      */
     public function setPosY($pos_y)
@@ -420,6 +431,27 @@ class RobotInfo implements ArrayAccess
     {
         
         $this->points = $points;
+        return $this;
+    }
+    
+    /**
+     * Gets missed_turns
+     * @return Number
+     */
+    public function getMissedTurns()
+    {
+        return $this->missed_turns;
+    }
+  
+    /**
+     * Sets missed_turns
+     * @param Number $missed_turns 0 if the robot sent a command for every game turn.
+     * @return $this
+     */
+    public function setMissedTurns($missed_turns)
+    {
+        
+        $this->missed_turns = $missed_turns;
         return $this;
     }
     

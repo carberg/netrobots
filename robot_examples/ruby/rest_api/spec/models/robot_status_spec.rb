@@ -92,6 +92,16 @@ describe 'RobotStatus' do
     end
   end
 
+  describe 'test attribute "missed_turns"' do
+    it 'should work' do
+       # assertion here
+       # should be_a()
+       # should be_nil
+       # should ==
+       # should_not ==
+    end
+  end
+
   describe 'test attribute "points"' do
     it 'should work' do
        # assertion here

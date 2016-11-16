@@ -46,7 +46,8 @@ class RobotInfo(object):
             'acceleration': 'float',
             'reloading_time': 'float',
             'health': 'float',
-            'points': 'float'
+            'points': 'float',
+            'missed_turns': 'float'
         }
 
         self.attribute_map = {
@@ -59,7 +60,8 @@ class RobotInfo(object):
             'acceleration': 'acceleration',
             'reloading_time': 'reloadingTime',
             'health': 'health',
-            'points': 'points'
+            'points': 'points',
+            'missed_turns': 'missedTurns'
         }
 
         self._robot_id = None
@@ -72,6 +74,7 @@ class RobotInfo(object):
         self._reloading_time = None
         self._health = None
         self._points = None
+        self._missed_turns = None
 
     @property
     def robot_id(self):
@@ -99,7 +102,7 @@ class RobotInfo(object):
     def pos_x(self):
         """
         Gets the pos_x of this RobotInfo.
-
+        0 is the left most point of the board.
 
         :return: The pos_x of this RobotInfo.
         :rtype: float
@@ -110,7 +113,7 @@ class RobotInfo(object):
     def pos_x(self, pos_x):
         """
         Sets the pos_x of this RobotInfo.
-
+        0 is the left most point of the board.
 
         :param pos_x: The pos_x of this RobotInfo.
         :type: float
@@ -121,7 +124,7 @@ class RobotInfo(object):
     def pos_y(self):
         """
         Gets the pos_y of this RobotInfo.
-
+        0 is the upper most point of the board.
 
         :return: The pos_y of this RobotInfo.
         :rtype: float
@@ -132,7 +135,7 @@ class RobotInfo(object):
     def pos_y(self, pos_y):
         """
         Sets the pos_y of this RobotInfo.
-
+        0 is the upper most point of the board.
 
         :param pos_y: The pos_y of this RobotInfo.
         :type: float
@@ -292,6 +295,28 @@ class RobotInfo(object):
         :type: float
         """
         self._points = points
+
+    @property
+    def missed_turns(self):
+        """
+        Gets the missed_turns of this RobotInfo.
+        0 if the robot sent a command for every game turn.
+
+        :return: The missed_turns of this RobotInfo.
+        :rtype: float
+        """
+        return self._missed_turns
+
+    @missed_turns.setter
+    def missed_turns(self, missed_turns):
+        """
+        Sets the missed_turns of this RobotInfo.
+        0 if the robot sent a command for every game turn.
+
+        :param missed_turns: The missed_turns of this RobotInfo.
+        :type: float
+        """
+        self._missed_turns = missed_turns
 
     def to_dict(self):
         """

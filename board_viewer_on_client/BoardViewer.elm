@@ -126,6 +126,7 @@ type alias RobotInfo =
       -- ^ the left time before the robot can fire
     , health : Float
     , points : Float
+    , missedTurns : Int
     }
 
 -- | An event to process.
@@ -935,6 +936,7 @@ viewInfoSection model =
                         [ Table.th [ ] [ text "Robot" ]
                         , Table.th [ ] [ text "Points" ]
                         , Table.th [ ] [ text "Health" ]
+                        , Table.th [ ] [ text "Missed Turns"]
                         ]
                   ]
              , Table.tbody []
@@ -943,7 +945,8 @@ viewInfoSection model =
                                        [ Table.td [ css "color" ecr.color] [ text ecr.name ]
                                        , Table.td [ Table.numeric ] [ text (niceFloat ecr.robot.points) ]
                                        , Table.td [ Table.numeric ] [ text (niceFloat ecr.robot.health) ]
-                                       ]))
+                                       , Table.td [ Table.numeric ] [ text (toString ecr.robot.missedTurns) ]
+                                        ]))
             ]
 
         fullSize = [ Grid.size Grid.All 12 ]
@@ -1255,21 +1258,22 @@ boardInfoDecoder =
 
 robotInfoDecoder : Decoder RobotInfo
 robotInfoDecoder =
-  let part1 = object4
-                (,,,) 
+  let part1 = object6
+                (,,,,,) 
                 ("robotId" := int)
                 ("posX" := float)
                 ("posY" := float)
                 ("direction" := float)
-
-      part2 (robotId, posX, posY, direction) =
-        object6 (RobotInfo robotId posX posY direction)
-          ("currentSpeed" := float)
-          ("requiredSpeed" := float)
+                ("currentSpeed" := float)
+                ("requiredSpeed" := float)
+ 
+      part2 (robotId, posX, posY, direction, currentSpeed, requiredSpeed) =
+        object5 (RobotInfo robotId posX posY direction currentSpeed requiredSpeed)
           ("acceleration" := float)
           ("reloadingTime" := float)
           ("health" := float)
           ("points" := float)
+          ("missedTurns" := int)
 
   in part1 `andThen` part2
 

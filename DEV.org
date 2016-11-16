@@ -69,13 +69,12 @@ Server sends events in chunks and streamed.
 *** TODO Various Improvements
 
 TODO make sure of sending compressed js files
-
-TODO send also complete stats about missing turns of the ROBOTS
+TODO dispaly info about the board size
 TODO manage the correct real-time time-frame
-TODO include stats with boardinfo about robots missing commands, and so on
 TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
+TODO show board-size
+TODO show server command rate
 
-TODO remove server error messages on the shell
 
 TODO port the code of the sniper from examples directory
 TODO remove old examples directory
@@ -106,9 +105,7 @@ TODO compress events to remote board viewers, because they are not so small (45k
 
 TODO make sure that killed robots or robots with errors does not steal all the resources
 
-TODO the home page should be:
-- TODO more beatiful
-- TODO include a link to the REST API in dynamic html format
+TODO the server is not fast: profile and search what are the slow functions
 
 ** Client Robots
 

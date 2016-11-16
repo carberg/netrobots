@@ -17,8 +17,10 @@ module SwaggerClient
   class RobotInfo
     attr_accessor :robot_id
 
+    # 0 is the left most point of the board.
     attr_accessor :pos_x
 
+    # 0 is the upper most point of the board.
     attr_accessor :pos_y
 
     # Direction expressed in degrees. 0 degree is EAST, 90 degree is NORTH, 180 degree is WEST, 270 degree is SOUTH
@@ -38,6 +40,9 @@ module SwaggerClient
 
     # the earned points.
     attr_accessor :points
+
+    # 0 if the robot sent a command for every game turn.
+    attr_accessor :missed_turns
 
     # Attribute mapping from ruby-style variable name to JSON key.
     def self.attribute_map
@@ -61,7 +66,9 @@ module SwaggerClient
         
         :'health' => :'health',
         
-        :'points' => :'points'
+        :'points' => :'points',
+        
+        :'missed_turns' => :'missedTurns'
         
       }
     end
@@ -78,7 +85,8 @@ module SwaggerClient
         :'acceleration' => :'Float',
         :'reloading_time' => :'Float',
         :'health' => :'Float',
-        :'points' => :'Float'
+        :'points' => :'Float',
+        :'missed_turns' => :'Float'
         
       }
     end
@@ -130,6 +138,10 @@ module SwaggerClient
         self.points = attributes[:'points']
       end
       
+      if attributes[:'missedTurns']
+        self.missed_turns = attributes[:'missedTurns']
+      end
+      
     end
 
     # Check equality by comparing each attribute.
@@ -145,7 +157,8 @@ module SwaggerClient
           acceleration == o.acceleration &&
           reloading_time == o.reloading_time &&
           health == o.health &&
-          points == o.points
+          points == o.points &&
+          missed_turns == o.missed_turns
     end
 
     # @see the `==` method
@@ -155,7 +168,7 @@ module SwaggerClient
 
     # Calculate hash code according to all attributes.
     def hash
-      [robot_id, pos_x, pos_y, direction, current_speed, required_speed, acceleration, reloading_time, health, points].hash
+      [robot_id, pos_x, pos_y, direction, current_speed, required_speed, acceleration, reloading_time, health, points, missed_turns].hash
     end
 
     # build the object from hash

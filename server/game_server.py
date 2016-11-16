@@ -189,8 +189,8 @@ def process_game_turn():
     for token, command in next_robot_commands.iteritems():
         """ :var command: RobotCommand
         """
+        robot = game_board.get_robot_by_token(token)
         if command is not None:
-            robot = game_board.get_robot_by_token(token)
             if robot is not None:
                 robot.set_next_command(command)
                 new_token = robot.token
@@ -203,6 +203,9 @@ def process_game_turn():
         else:
             new_next_robot_commands[token] = None
             # NOTE: it must create a new empty slot in any case
+
+            if robot is not None:
+                robot.missed_turns = robot.missed_turns + 1
 
     # Advance the board simulation.
 

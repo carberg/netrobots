@@ -10,6 +10,7 @@ type RobotStatus struct {
     SimulationTime  float32  `json:"simulationTime,omitempty"`
     TimeTick  float32  `json:"timeTick,omitempty"`
     RealTimeTick  float32  `json:"realTimeTick,omitempty"`
+    MissedTurns  Number  `json:"missedTurns,omitempty"`
     Points  float32  `json:"points,omitempty"`
     Health  float32  `json:"health,omitempty"`
     IsDead  bool  `json:"isDead,omitempty"`

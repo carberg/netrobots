@@ -57,6 +57,7 @@ class RobotStatus implements ArrayAccess
         'simulation_time' => 'float',
         'time_tick' => 'float',
         'real_time_tick' => 'float',
+        'missed_turns' => 'Number',
         'points' => 'float',
         'health' => 'float',
         'is_dead' => 'bool',
@@ -86,6 +87,7 @@ class RobotStatus implements ArrayAccess
         'simulation_time' => 'simulationTime',
         'time_tick' => 'timeTick',
         'real_time_tick' => 'realTimeTick',
+        'missed_turns' => 'missedTurns',
         'points' => 'points',
         'health' => 'health',
         'is_dead' => 'isDead',
@@ -115,6 +117,7 @@ class RobotStatus implements ArrayAccess
         'simulation_time' => 'setSimulationTime',
         'time_tick' => 'setTimeTick',
         'real_time_tick' => 'setRealTimeTick',
+        'missed_turns' => 'setMissedTurns',
         'points' => 'setPoints',
         'health' => 'setHealth',
         'is_dead' => 'setIsDead',
@@ -144,6 +147,7 @@ class RobotStatus implements ArrayAccess
         'simulation_time' => 'getSimulationTime',
         'time_tick' => 'getTimeTick',
         'real_time_tick' => 'getRealTimeTick',
+        'missed_turns' => 'getMissedTurns',
         'points' => 'getPoints',
         'health' => 'getHealth',
         'is_dead' => 'getIsDead',
@@ -182,7 +186,7 @@ class RobotStatus implements ArrayAccess
     protected $configuration;
     
     /**
-      * $simulation_time The current simulation time.
+      * $simulation_time The current simulation time, expressed in virtual simulated seconds.
       * @var float
       */
     protected $simulation_time;
@@ -198,6 +202,12 @@ class RobotStatus implements ArrayAccess
       * @var float
       */
     protected $real_time_tick;
+    
+    /**
+      * $missed_turns 0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+      * @var Number
+      */
+    protected $missed_turns;
     
     /**
       * $points The sum of all hit points of the fired missiles. The robot with more hit points is the winner.
@@ -286,6 +296,7 @@ class RobotStatus implements ArrayAccess
             $this->simulation_time = $data["simulation_time"];
             $this->time_tick = $data["time_tick"];
             $this->real_time_tick = $data["real_time_tick"];
+            $this->missed_turns = $data["missed_turns"];
             $this->points = $data["points"];
             $this->health = $data["health"];
             $this->is_dead = $data["is_dead"];
@@ -375,7 +386,7 @@ class RobotStatus implements ArrayAccess
   
     /**
      * Sets simulation_time
-     * @param float $simulation_time The current simulation time.
+     * @param float $simulation_time The current simulation time, expressed in virtual simulated seconds.
      * @return $this
      */
     public function setSimulationTime($simulation_time)
@@ -424,6 +435,27 @@ class RobotStatus implements ArrayAccess
     {
         
         $this->real_time_tick = $real_time_tick;
+        return $this;
+    }
+    
+    /**
+     * Gets missed_turns
+     * @return Number
+     */
+    public function getMissedTurns()
+    {
+        return $this->missed_turns;
+    }
+  
+    /**
+     * Sets missed_turns
+     * @param Number $missed_turns 0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+     * @return $this
+     */
+    public function setMissedTurns($missed_turns)
+    {
+        
+        $this->missed_turns = $missed_turns;
         return $this;
     }
     

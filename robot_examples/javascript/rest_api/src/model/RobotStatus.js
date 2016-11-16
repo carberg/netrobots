@@ -32,6 +32,7 @@
    * @param simulationTime
    * @param timeTick
    * @param realTimeTick
+   * @param missedTurns
    * @param health
    * @param isDead
    * @param direction
@@ -43,7 +44,7 @@
    * @param cannonReloadingTime
    * @param firedNewMissile
    */
-  var exports = function(name, token, configuration, simulationTime, timeTick, realTimeTick, health, isDead, direction, speed, posX, posY, maxBoardX, maxBoardY, cannonReloadingTime, firedNewMissile) {
+  var exports = function(name, token, configuration, simulationTime, timeTick, realTimeTick, missedTurns, health, isDead, direction, speed, posX, posY, maxBoardX, maxBoardY, cannonReloadingTime, firedNewMissile) {
 
     this['name'] = name;
     this['token'] = token;
@@ -51,6 +52,7 @@
     this['simulationTime'] = simulationTime;
     this['timeTick'] = timeTick;
     this['realTimeTick'] = realTimeTick;
+    this['missedTurns'] = missedTurns;
 
     this['health'] = health;
     this['isDead'] = isDead;
@@ -93,6 +95,9 @@
       }
       if (data.hasOwnProperty('realTimeTick')) {
         obj['realTimeTick'] = ApiClient.convertToType(data['realTimeTick'], 'Number');
+      }
+      if (data.hasOwnProperty('missedTurns')) {
+        obj['missedTurns'] = ApiClient.convertToType(data['missedTurns'], 'Number');
       }
       if (data.hasOwnProperty('points')) {
         obj['points'] = ApiClient.convertToType(data['points'], 'Number');
@@ -152,7 +157,7 @@
   exports.prototype['configuration'] = undefined;
 
   /**
-   * The current simulation time.
+   * The current simulation time, expressed in virtual simulated seconds.
    * @member {Number} simulationTime
    */
   exports.prototype['simulationTime'] = undefined;
@@ -168,6 +173,12 @@
    * @member {Number} realTimeTick
    */
   exports.prototype['realTimeTick'] = undefined;
+
+  /**
+   * 0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+   * @member {Number} missedTurns
+   */
+  exports.prototype['missedTurns'] = undefined;
 
   /**
    * The sum of all hit points of the fired missiles. The robot with more hit points is the winner.

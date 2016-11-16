@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  **/
 
 @ApiModel(description = "Info about the robot.")
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-09T23:26:57.234+01:00")
+@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaClientCodegen", date = "2016-11-16T05:09:07.503+01:00")
 public class RobotInfo   {
   
   private BigDecimal robotId = null;
@@ -26,6 +26,7 @@ public class RobotInfo   {
   private Float reloadingTime = null;
   private Float health = null;
   private Float points = null;
+  private BigDecimal missedTurns = null;
 
   
   /**
@@ -46,13 +47,14 @@ public class RobotInfo   {
 
   
   /**
+   * 0 is the left most point of the board.
    **/
   public RobotInfo posX(Float posX) {
     this.posX = posX;
     return this;
   }
   
-  @ApiModelProperty(example = "null", required = true, value = "")
+  @ApiModelProperty(example = "null", required = true, value = "0 is the left most point of the board.")
   @JsonProperty("posX")
   public Float getPosX() {
     return posX;
@@ -63,13 +65,14 @@ public class RobotInfo   {
 
   
   /**
+   * 0 is the upper most point of the board.
    **/
   public RobotInfo posY(Float posY) {
     this.posY = posY;
     return this;
   }
   
-  @ApiModelProperty(example = "null", required = true, value = "")
+  @ApiModelProperty(example = "null", required = true, value = "0 is the upper most point of the board.")
   @JsonProperty("posY")
   public Float getPosY() {
     return posY;
@@ -204,6 +207,24 @@ public class RobotInfo   {
   }
 
   
+  /**
+   * 0 if the robot sent a command for every game turn.
+   **/
+  public RobotInfo missedTurns(BigDecimal missedTurns) {
+    this.missedTurns = missedTurns;
+    return this;
+  }
+  
+  @ApiModelProperty(example = "null", required = true, value = "0 if the robot sent a command for every game turn.")
+  @JsonProperty("missedTurns")
+  public BigDecimal getMissedTurns() {
+    return missedTurns;
+  }
+  public void setMissedTurns(BigDecimal missedTurns) {
+    this.missedTurns = missedTurns;
+  }
+
+  
 
   @Override
   public boolean equals(java.lang.Object o) {
@@ -223,12 +244,13 @@ public class RobotInfo   {
         Objects.equals(this.acceleration, robotInfo.acceleration) &&
         Objects.equals(this.reloadingTime, robotInfo.reloadingTime) &&
         Objects.equals(this.health, robotInfo.health) &&
-        Objects.equals(this.points, robotInfo.points);
+        Objects.equals(this.points, robotInfo.points) &&
+        Objects.equals(this.missedTurns, robotInfo.missedTurns);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health, points);
+    return Objects.hash(robotId, posX, posY, direction, currentSpeed, requiredSpeed, acceleration, reloadingTime, health, points, missedTurns);
   }
 
   @Override
@@ -246,6 +268,7 @@ public class RobotInfo   {
     sb.append("    reloadingTime: ").append(toIndentedString(reloadingTime)).append("\n");
     sb.append("    health: ").append(toIndentedString(health)).append("\n");
     sb.append("    points: ").append(toIndentedString(points)).append("\n");
+    sb.append("    missedTurns: ").append(toIndentedString(missedTurns)).append("\n");
     sb.append("}");
     return sb.toString();
   }

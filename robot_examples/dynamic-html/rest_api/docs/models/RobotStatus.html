@@ -24,7 +24,7 @@
   
 <ul class="parameter">
   <li class="param-required-true">simulationTime : Float
-    <br/>The current simulation time.
+    <br/>The current simulation time, expressed in virtual simulated seconds.
     
   </li>
 </ul>
@@ -39,6 +39,13 @@
 <ul class="parameter">
   <li class="param-required-true">realTimeTick : Float
     <br/>The time in seconds, the system waits before processing the next request from remote robots.\nWith slow nework connections this value should be higher, because otherwise some remote robots could miss some game turns.\nNOTE: this is the real world time you have for sending the next command without loosing a turn.\nNOTE: this time differs from timeIncrement, because timeIncrement is the simulation time that pass between two robots commands.\n
+    
+  </li>
+</ul>
+  
+<ul class="parameter">
+  <li class="param-required-true">missedTurns : BigDecimal
+    <br/>0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
     
   </li>
 </ul>

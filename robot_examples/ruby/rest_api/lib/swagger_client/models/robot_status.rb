@@ -22,7 +22,7 @@ module SwaggerClient
 
     attr_accessor :configuration
 
-    # The current simulation time.
+    # The current simulation time, expressed in virtual simulated seconds.
     attr_accessor :simulation_time
 
     # The next command will be executed at simulationTime + this value. Usually it is a constant value for all the course of the simulation.
@@ -30,6 +30,9 @@ module SwaggerClient
 
     # The time in seconds, the system waits before processing the next request from remote robots.\nWith slow nework connections this value should be higher, because otherwise some remote robots could miss some game turns.\nNOTE: this is the real world time you have for sending the next command without loosing a turn.\nNOTE: this time differs from timeIncrement, because timeIncrement is the simulation time that pass between two robots commands.\n
     attr_accessor :real_time_tick
+
+    # 0 if this robot sent a command for each game turn. In case of network connection with high latency, the number of missed turns.
+    attr_accessor :missed_turns
 
     # The sum of all hit points of the fired missiles. The robot with more hit points is the winner.
     attr_accessor :points
@@ -77,6 +80,8 @@ module SwaggerClient
         
         :'real_time_tick' => :'realTimeTick',
         
+        :'missed_turns' => :'missedTurns',
+        
         :'points' => :'points',
         
         :'health' => :'health',
@@ -113,6 +118,7 @@ module SwaggerClient
         :'simulation_time' => :'Float',
         :'time_tick' => :'Float',
         :'real_time_tick' => :'Float',
+        :'missed_turns' => :'Float',
         :'points' => :'Float',
         :'health' => :'Float',
         :'is_dead' => :'BOOLEAN',
@@ -158,6 +164,10 @@ module SwaggerClient
       
       if attributes[:'realTimeTick']
         self.real_time_tick = attributes[:'realTimeTick']
+      end
+      
+      if attributes[:'missedTurns']
+        self.missed_turns = attributes[:'missedTurns']
       end
       
       if attributes[:'points']
@@ -220,6 +230,7 @@ module SwaggerClient
           simulation_time == o.simulation_time &&
           time_tick == o.time_tick &&
           real_time_tick == o.real_time_tick &&
+          missed_turns == o.missed_turns &&
           points == o.points &&
           health == o.health &&
           is_dead == o.is_dead &&
@@ -241,7 +252,7 @@ module SwaggerClient
 
     # Calculate hash code according to all attributes.
     def hash
-      [name, token, configuration, simulation_time, time_tick, real_time_tick, points, health, is_dead, direction, speed, pos_x, pos_y, max_board_x, max_board_y, cannon_reloading_time, fired_new_missile, scan_status].hash
+      [name, token, configuration, simulation_time, time_tick, real_time_tick, missed_turns, points, health, is_dead, direction, speed, pos_x, pos_y, max_board_x, max_board_y, cannon_reloading_time, fired_new_missile, scan_status].hash
     end
 
     # build the object from hash
