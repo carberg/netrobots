@@ -20,9 +20,11 @@ module BoardViewer exposing (..)
 import Json.Decode exposing (..)
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
+import Svg.Lazy as Svg
 import Html as Html
 import Html.Attributes as Html
 import Html.App as Html
+import Html.Lazy as Html
 import AnimationFrame
 import Window as W
 import Time
@@ -821,7 +823,7 @@ view model =
                            Nothing -> False
                            Just _ -> True
 
-    in if model.simulationIsStarted && isThereBoardSize && isThereBoard then viewContent model else viewStreaming model
+    in if model.simulationIsStarted && isThereBoardSize && isThereBoard then (Html.lazy viewContent model) else viewStreaming model
 
 
 -- | Display the initial streaming message.
@@ -853,7 +855,7 @@ viewStreaming model =
         [ 
           Grid.grid
             []
-            [  Grid.cell titleSize [ netRobotsLogo "100%" "100%"]
+            [  Grid.cell titleSize [ Svg.lazy2 netRobotsLogo "100%" "100%"]
              , Grid.cell titleSize [ progress perc]
             ]
         ]
@@ -919,9 +921,6 @@ viewContent model =
 viewInfoSection : Model -> Html.Html Msg
 viewInfoSection model =
     let 
-        viewErrorMessages =
-            [Html.ul [] (List.map (\msg -> Html.li [] [Html.text msg]) (List.take 10 model.errorMessages))]
-
         bi = case model.boardInfo of
                  Just v -> v
                  _ -> Debug.crash "unexpected error 5757"
@@ -987,7 +986,7 @@ viewInfoSection model =
 
     in Grid.grid
             [  Grid.noSpacing ]
-            [  Grid.cell fullSize [ netRobotsLogo "100%" "100%"]
+            [  Grid.cell fullSize [ Svg.lazy2 netRobotsLogo "100%" "100%"]
              , Grid.cell fullSize [ viewRobotsInfo ]
              , emptyRow
              , Grid.cell fullSize [ viewServerInfo ]
@@ -1101,7 +1100,12 @@ viewBoard model =
               , scan.radarDebugLine
               ]
 
-    in  (Svg.defs [] ((colorGradientDefs model.usedRobotColors) ++ [tankSymbolDef, missileSymbolDef])) :: drawBoardPerimeter :: drawActiveEvents 
+    in  (Svg.lazy defaultSvgDefs model.usedRobotColors):: drawBoardPerimeter :: drawActiveEvents 
+
+-- | Used for lazy speedup.
+defaultSvgDefs : Dict.Dict String String -> Svg.Svg Msg
+defaultSvgDefs usedRobotColors =
+    (Svg.defs [] ((colorGradientDefs usedRobotColors) ++ [tankSymbolDef, missileSymbolDef])) 
 
 colorGradientDefs : Dict.Dict String String -> List (Svg Msg)
 colorGradientDefs colorToId =
@@ -1115,7 +1119,6 @@ colorGradientDefs colorToId =
            -- and the rest is the 45 units with linear decreasing damage.
            -- The proporiotn is 4%
              ) (Dict.toList colorToId)
-
 
 tankHeightEm = 2.0
 tankWidthEm = 4.0

@@ -14351,6 +14351,10 @@ var _elm_lang$core$Set$partition = F2(
 		};
 	});
 
+var _elm_lang$html$Html_Lazy$lazy3 = _elm_lang$virtual_dom$VirtualDom$lazy3;
+var _elm_lang$html$Html_Lazy$lazy2 = _elm_lang$virtual_dom$VirtualDom$lazy2;
+var _elm_lang$html$Html_Lazy$lazy = _elm_lang$virtual_dom$VirtualDom$lazy;
+
 var _elm_lang$svg$Svg$text = _elm_lang$virtual_dom$VirtualDom$text;
 var _elm_lang$svg$Svg$svgNamespace = A2(
 	_elm_lang$virtual_dom$VirtualDom$property,
@@ -14698,6 +14702,10 @@ var _elm_lang$svg$Svg_Attributes$additive = _elm_lang$virtual_dom$VirtualDom$att
 var _elm_lang$svg$Svg_Attributes$accumulate = _elm_lang$virtual_dom$VirtualDom$attribute('accumulate');
 var _elm_lang$svg$Svg_Attributes$accelerate = _elm_lang$virtual_dom$VirtualDom$attribute('accelerate');
 var _elm_lang$svg$Svg_Attributes$accentHeight = _elm_lang$virtual_dom$VirtualDom$attribute('accent-height');
+
+var _elm_lang$svg$Svg_Lazy$lazy3 = _elm_lang$virtual_dom$VirtualDom$lazy3;
+var _elm_lang$svg$Svg_Lazy$lazy2 = _elm_lang$virtual_dom$VirtualDom$lazy2;
+var _elm_lang$svg$Svg_Lazy$lazy = _elm_lang$virtual_dom$VirtualDom$lazy;
 
 //import Dict, List, Maybe, Native.Scheduler //
 
@@ -15438,7 +15446,7 @@ var _user$project$BoardViewer$viewStreaming = function (model) {
 						titleSize,
 						_elm_lang$core$Native_List.fromArray(
 							[
-								A2(_user$project$BoardViewer$netRobotsLogo, '100%', '100%')
+								A3(_elm_lang$svg$Svg_Lazy$lazy2, _user$project$BoardViewer$netRobotsLogo, '100%', '100%')
 							])),
 						A2(
 						_debois$elm_mdl$Material_Grid$cell,
@@ -15518,8 +15526,8 @@ var _user$project$BoardViewer$model_robotColor = F2(
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 308, column: 5},
-					end: {line: 310, column: 29}
+					start: {line: 310, column: 5},
+					end: {line: 312, column: 29}
 				},
 				_p8)('unexpeced error in the code: 1053');
 		} else {
@@ -15660,6 +15668,17 @@ var _user$project$BoardViewer$tankSymbolDef = A2(
 						[]))
 				]))
 		]));
+var _user$project$BoardViewer$defaultSvgDefs = function (usedRobotColors) {
+	return A2(
+		_elm_lang$svg$Svg$defs,
+		_elm_lang$core$Native_List.fromArray(
+			[]),
+		A2(
+			_elm_lang$core$Basics_ops['++'],
+			_user$project$BoardViewer$colorGradientDefs(usedRobotColors),
+			_elm_lang$core$Native_List.fromArray(
+				[_user$project$BoardViewer$tankSymbolDef, _user$project$BoardViewer$missileSymbolDef])));
+};
 var _user$project$BoardViewer$niceFloat = function (n) {
 	return _elm_lang$core$Basics$toString(
 		_elm_lang$core$Basics$round(n));
@@ -15798,8 +15817,8 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 925, column: 14},
-					end: {line: 927, column: 58}
+					start: {line: 924, column: 14},
+					end: {line: 926, column: 58}
 				},
 				_p13)('unexpected error 5757');
 		}
@@ -15974,26 +15993,6 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 							]))
 					]))
 			]));
-	var viewErrorMessages = _elm_lang$core$Native_List.fromArray(
-		[
-			A2(
-			_elm_lang$html$Html$ul,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			A2(
-				_elm_lang$core$List$map,
-				function (msg) {
-					return A2(
-						_elm_lang$html$Html$li,
-						_elm_lang$core$Native_List.fromArray(
-							[]),
-						_elm_lang$core$Native_List.fromArray(
-							[
-								_elm_lang$html$Html$text(msg)
-							]));
-				},
-				A2(_elm_lang$core$List$take, 10, model.errorMessages)))
-		]);
 	return A2(
 		_debois$elm_mdl$Material_Grid$grid,
 		_elm_lang$core$Native_List.fromArray(
@@ -16005,7 +16004,7 @@ var _user$project$BoardViewer$viewInfoSection = function (model) {
 				fullSize,
 				_elm_lang$core$Native_List.fromArray(
 					[
-						A2(_user$project$BoardViewer$netRobotsLogo, '100%', '100%')
+						A3(_elm_lang$svg$Svg_Lazy$lazy2, _user$project$BoardViewer$netRobotsLogo, '100%', '100%')
 					])),
 				A2(
 				_debois$elm_mdl$Material_Grid$cell,
@@ -16289,8 +16288,8 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1001, column: 13},
-					end: {line: 1003, column: 63}
+					start: {line: 1000, column: 13},
+					end: {line: 1002, column: 63}
 				},
 				_p16)('contract not respected');
 		}
@@ -16313,15 +16312,7 @@ var _user$project$BoardViewer$viewBoard = function (model) {
 			[]));
 	return A2(
 		_elm_lang$core$List_ops['::'],
-		A2(
-			_elm_lang$svg$Svg$defs,
-			_elm_lang$core$Native_List.fromArray(
-				[]),
-			A2(
-				_elm_lang$core$Basics_ops['++'],
-				_user$project$BoardViewer$colorGradientDefs(model.usedRobotColors),
-				_elm_lang$core$Native_List.fromArray(
-					[_user$project$BoardViewer$tankSymbolDef, _user$project$BoardViewer$missileSymbolDef]))),
+		A2(_elm_lang$svg$Svg_Lazy$lazy, _user$project$BoardViewer$defaultSvgDefs, model.usedRobotColors),
 		A2(_elm_lang$core$List_ops['::'], drawBoardPerimeter, drawActiveEvents));
 };
 var _user$project$BoardViewer$viewContent = function (model) {
@@ -16342,8 +16333,8 @@ var _user$project$BoardViewer$viewContent = function (model) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 884, column: 13},
-					end: {line: 886, column: 64}
+					start: {line: 886, column: 13},
+					end: {line: 888, column: 64}
 				},
 				_p18)('contract not respected');
 		}
@@ -16444,7 +16435,7 @@ var _user$project$BoardViewer$view = function (model) {
 	}();
 	var isThereBoardSize = _elm_lang$core$Basics$not(
 		_elm_lang$core$Native_Utils.eq(model.windowSize.width, 0));
-	return (model.simulationIsStarted && (isThereBoardSize && isThereBoard)) ? _user$project$BoardViewer$viewContent(model) : _user$project$BoardViewer$viewStreaming(model);
+	return (model.simulationIsStarted && (isThereBoardSize && isThereBoard)) ? A2(_elm_lang$html$Html_Lazy$lazy, _user$project$BoardViewer$viewContent, model) : _user$project$BoardViewer$viewStreaming(model);
 };
 var _user$project$BoardViewer$polarToCartesian = F4(
 	function (centerX, centerY, radius, angleInRadians) {
@@ -16918,8 +16909,8 @@ var _user$project$BoardViewer$model_processEvent = F2(
 				return _elm_lang$core$Native_Utils.crashCase(
 					'BoardViewer',
 					{
-						start: {line: 542, column: 13},
-						end: {line: 544, column: 28}
+						start: {line: 544, column: 13},
+						end: {line: 546, column: 28}
 					},
 					_p31)('impossible');
 			} else {
@@ -17347,8 +17338,8 @@ var _user$project$BoardViewer$boardEventVariantDecoder = function (eventType) {
 			return _elm_lang$core$Native_Utils.crashCase(
 				'BoardViewer',
 				{
-					start: {line: 1324, column: 5},
-					end: {line: 1332, column: 76}
+					start: {line: 1328, column: 5},
+					end: {line: 1336, column: 76}
 				},
 				_p61)(
 				A2(
