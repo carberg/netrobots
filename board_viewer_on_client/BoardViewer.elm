@@ -922,12 +922,44 @@ viewInfoSection model =
         viewErrorMessages =
             [Html.ul [] (List.map (\msg -> Html.li [] [Html.text msg]) (List.take 10 model.errorMessages))]
 
-        viewModelDim : List (Html.Html Msg)
-        viewModelDim =
-            [Html.p [] [Html.text ("Sim. Time: " ++ toString (round model.currentSimulationTime))]
-            ,Html.p [] [Html.text ("FPS: " ++ toString (round fps))]]
+        bi = case model.boardInfo of
+                 Just v -> v
+                 _ -> Debug.crash "unexpected error 5757"
 
         fps = if model.totSeconds == 0.0 then 0.0 else (toFloat model.totRedrawFrames) / model.totSeconds
+
+        viewServerInfo : Html.Html Msg
+        viewServerInfo =
+            Table.table [] [
+               Table.thead []
+                  [ Table.tr []
+                        [ Table.th [ ] [ text "Server Property" ]
+                        , Table.th [ ] [ text "Value" ]
+                        ]
+                  ]
+             , Table.tbody []
+                           [ Table.tr []
+                                [ Table.td [ ] [ text "Game Board dim." ]
+                                , Table.td [ ] [ text ((niceFloat bi.maxBoardX) ++ " x " ++ (niceFloat bi.maxBoardY)) ]
+                                ]
+                           , Table.tr []
+                                [ Table.td [ ] [ text "Robot moves for each second" ]
+                                , Table.td [ Table.numeric ] [ text (toString (1.0 / bi.turnDeltaTime)) ]
+                                ]
+                           , Table.tr []
+                                [ Table.td [ ] [ text "Virtual simulated seconds" ]
+                                , Table.td [ Table.numeric ] [ text (niceFloat model.currentSimulationTime) ]
+                                ]
+                           , Table.tr []
+                                [ Table.td [ ] [ text "Max network latency (in seconds))" ]
+                                , Table.td [ Table.numeric ] [ text (toString bi.networkLatency) ]
+                                ]
+                           , Table.tr []
+                                [ Table.td [ ] [ text "Frame per Second" ]
+                                , Table.td [ Table.numeric ] [ text (niceFloat fps) ]
+                                ]
+                            ]
+                ]
 
         viewRobotsInfo =
             Table.table [] [
@@ -951,10 +983,14 @@ viewInfoSection model =
 
         fullSize = [ Grid.size Grid.All 12 ]
 
+        emptyRow = Grid.cell fullSize [ Html.p [] []]
+
     in Grid.grid
             [  Grid.noSpacing ]
             [  Grid.cell fullSize [ netRobotsLogo "100%" "100%"]
              , Grid.cell fullSize [ viewRobotsInfo ]
+             , emptyRow
+             , Grid.cell fullSize [ viewServerInfo ]
             ]
 
 

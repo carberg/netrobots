@@ -68,13 +68,11 @@ Server sends events in chunks and streamed.
 
 *** TODO Various Improvements
 
-TODO make sure of sending compressed js files
 TODO dispaly info about the board size
 TODO manage the correct real-time time-frame
-TODO document for user the differences between time-simulation tick (the virtual speed of a robot), and the network latency
 TODO show board-size
 TODO show server command rate
-
+TODO make sure of sending compressed js files
 
 TODO port the code of the sniper from examples directory
 TODO remove old examples directory
@@ -83,6 +81,8 @@ TODO sniper continue firing after the first stop
 TODO cannonReloadingTime is
 How many seconds the robot must wait before firing another missile. Min value: 2s. Max value: 6s. Deafault value: 2s.
 but it does not seem respected!
+
+TODO use all the space of the grid on the info section
 
 MAYBE clip explosions, missiles and so on inside the board
 
