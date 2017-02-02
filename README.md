@@ -56,14 +56,14 @@ Using Nix
 
 `default.nix` contains the required packages for the running environment.
 
-The demo are launched in this way:
+The server can be launched in this way, from the base directory: 
+
+    nix-shell default.nix --run "python run.py --run=8888"
+
+The demo robots are launched in this way:
 
     cd demo_scripts
     nix-shell ../default.nix --run "./run-demo.sh"
-
-The server can be launched in this way, from the base directory: 
-
-    nix-shell default.nix --run "python run.py"
 
 Project Development
 ===================

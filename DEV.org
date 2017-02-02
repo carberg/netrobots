@@ -86,197 +86,150 @@ TODO annotate the original HRobots project, that the new reference repo is ...
 
 
 * Public Accessible Server (RobotsRank)
-TODO sistemare
-TODO fare commit
-TODO dire nel documento e nella mailing list del nuovo documento
 
+** Similar Projects
+- http://robowiki.net/wiki/Main_Pag0e
 ** Requirements
-- [safe-server] safe for the server (the game board)
-- [safe-client] safe for the client (the robot) if it is implemented as a remote service
-- [security] safe passwords and so on
-- [stats] robot owner, robot type, robot version are used for collecting stats
-- a mechanism for being rather sure that a robot owne/type is not faked from some troll
-- [safe-commands] a mechanism for being sure that commands are sent from the correct robot
-- [asynchronous-tornaments] users can run robots and combat with other users without the needs that they are online at the same day/time
-- [code-reuse] reuse of already existing code
-- [cheap-resource-usage] il server e i client non devono richiedere grosse risorse in termini di RAM/CPU/Virtual-Machines
-- [secret-code] the robot code can be kept secret
-- [collaboration] improve server code, the rule of the game, supported programming languages
-- [robot-play] REST API for a robot playing a game
-- [robot-registration] protocol for registering robots
-- [widespread-usage] create a system easy for administrators (the game-server admin) and users (the robot owners) to install and use, so it can be used outside PUG group
-- [no-cheating] robots should no communicate toghether under hidden channels for sharing info about other robot positions
 
-** Design
- [safe-commands] is respected:
-- using HTTPS as connection method
-- now every command sent from a robot, receive a unique random token as answer from the server, and the robot can issue the next command only if it send the correct token
+- security: no compromizable server and client 
+- robust: server and robots continue to serve new games also in case of excetpions 
+- stats: leader-board with robot owner, robot name, robot version
+- community: for improving server code, the rules of the game, supported programming languages and so on
+- esay-deploy: for client robots and demo server
+- cheap-resource-usage: server can manage many games, and client robots can run on existing VM without using too much resources 
+- private-code: the robot source code can be kept secret
+- no-cheating: robots should no communicate toghether under hidden channels for sharing info about other robot positions
+- registration: every robot has an owner, a name/type and a version number. Robots can not impersonate other robots. Owners can not impersonate other owners.
+- code-reuse: reuse code of current NetRobots version
 
- [secret-code] a robot running as a service, and using a REST-API can be written in any language, and its code can be kept secret.
+** TODO Design
 
- [cheap-resource-usage] a robot can run in a Docker virtual machine on some shared VM where all the users trust each other. Nowdays the cost very few, and they can be activated for few months. Optionally the VM can be disabled.
- 
- [cheap-resource-usage] a robot can run on some local computer 1 day every week and the server when the robot register itself, can issue a series of tournaments, updating the stat-board. The problem it is if other robots are not online there can not be very much tournaments.
+easy-deploy:
+- the server can be installed using a Dockerfile. Users can install a local server, and try their robots locally. Dependencies are satisfied inside the Dockerfile. Install a minimal linux distro, and install Nix and related packages on it. Use a VOLUME for persistent data, that are stored in SQLITE or some OO Python DB. 
+- use git submodules for staring ad-hoc content like blog, wiki and so on, that are specific of some community
+- MAYBE disable IPBAN plugin on the server, because it can block various connections.
+- dolly
 
- [cheap-resource-usage] http://pypy.org/ can be used for the game-server, because it is compatible with Python, but a lot much faster. 
+robust server:
+- adopt a queue pattern: in a queue there are all the events to process and they are assigned to worker threads. Manage the queue inside Tornado because it is good enough and the code will be simplified. 
+- TODO check Tornado behaviour in case of excetpions.
+- decouple game-server from static-content:
+  - the blog and wiki are static pages
+  - there is nginx process serving static content
+  - the games of the past, the dashboard and so on are loaded as java-script code, but they are static files, so there is no need for dynamic server active, because the dynamic part is executed on the client side
+  - the game server update the stats every X minutes
 
- [collaboration]:
-- REST-API can have a version number, so with time it can be improved and the rule of the game improved
-- server code is on git-hub, so it can be improved
-- skeleton code for writing an initial robot in python/php/Haskell is on the same repo, and so it can be improved, and only advanced code can be kept secret from robot authors
+cheap-resource-usage for client robots:
+- I assume that every player of NetRobots has already an always-on VM, on which he can install a Docker container and that can run robots. Cheap costant usage of CPU and NetWork of the VM is preferred respect burst and fast activity. So the robot code impact is negligible.
+- the time before one robot command to another is 2 second. So the robot VM can be near idle, and the network resource usage in very low.
 
-[stats] 
-- the server can plan multiple games between the same robots, and report which is the stronger statically with interval confidence
-- old games can be easily reviewed more times, using the new BoardViewer, so an author can improve its robot
-- games should be searched according simple queries (also fixed), like “find the times my robot won agains robot X”, etc.. for viewing why it won or lost
-- when a robot is not available (in case is on a non always connected computer) the server must postpone the games, and signal this in the stats
+cheap-resource-usage for game server:
+- http://pypy.org/ can be used for the game-server, because it is compatible with Python, but a lot much faster. 
+- consider using CloudFare that has also free plans, for sending static content
+- store in the DB, and send games in a compressed way
+- store ACCESS LOGS only for the static content like Wiki and Blog but not for robot turns and also for the dashbord
+- TODO make sure that also the main nginx proxy on the server is storing only proper LOGS
 
-[stats]
-- there are 30 robots (for example)
-- repeated games beetween random groups of 4 robots
-- a robot starts with 100 health points 0 hit-points
-- every hit to a robot increase hit-points according the inflicted damage
-- when a robot has 0 health points is killed
-- when a robot is killed, 100 health points are shared between remaining robots, proportionally to hit-points, and the hit-points are reset to 0
-- the first 2 killed robots gain 0 points
-- the remaining 2 robots fight for a certain time (e.g. the double of the time required for killing the two robots, with a maximum hard-limit and some minimum hard-limit)
-- at the end they share the 4 point for the winning robots proportionally to their hit-points (that correspond to the inverse of health points)
-- these system favours robots good in defending, and good in attacking, and that can survive in a crowded board. kamikaze robots do not survive, and too much defensive robots does not survive.
-- after a certain number of games the worst ⅓ of robots are put in the A-X classify, and the best ⅔ robots are put in the A-(X-1) classify
-- the robots in the A-X classify plays toghether and the order is decided
-- the best ⅔ robots plays togheter and the worst ⅓ form the A-(X-2) classify and so on
-- at the end there are left 2 robots and there is the grand-final: they play toghether with 2 rabbits
-- these stats should be good because there is a sequence of significative games, with also the grand-final games, like in a cup. But games are repeated many times.
-- these stats should be good because both weak robots and strong robots can always find balanced games to watch and to use for improving the robot. Match in the same class of robots should be balanced and significative to watch.
+game stats and leader-board:
+- The leader-board is divided in legue. The legue-1 is the legue with the strongest robots.
+- Each legue is composed of 10 robots, with 2 additional system controlled robots that are not displayed in the leader-board. Robots fight only with robots of the same legue.
+- A game between robots is a game of 4 robots, and 2 of them can be system robots. System robots are useful for discovering if two robots in the same legue are playing as a secret team sharing info about scanned robots, and so on.
+- A game between robots has a maximum lenght of 15 virtual (simulated) minutes. A robot can issue 4 commands for each simulated second, so a game is composed of maximum 3600 commands.
+- A robot has 2 real-time seconds, for issuing a command, so the real-time lenght of a game is of 2 hours. So games are not meant to be seen in real-time, but analyzed after they are played, for improving the robot behaviour. The game stats and the leader-board is meant to change slowly with time, and not for real-time feedback.
+- For real-time feedback there is a gym-section where users can see their robots in actions in real-time. The gym is only for coding the robots, and it is not considered for calculating the leader-board.
+- There are 495 different combinations of 4 robots from a pool of 12, so after 3.5 days of simulation each possible combination of robots has theorically fight each other, but also before the 3.5 days the leader-board reflects the strenght of different robots.
+- At the end of each game, the leader board is updated, and the games of the past can be reviewed.
+- Games are choosen randomly each time, so robots does not know the opponent, and current games can never be seen.
+- If at the end of a game:
+  - there are 4 live robots, then every robot earn 0 point
+  - there are 3 live robots, then every robot earn 1 point
+  - there are 2 live robots, then the robot with more health earns 3 points, and the other robot 2 points
+  - there is 1 live robot, then it earns 4 point, and the robot before him 2 point
+- Every robot start with 100 health points, and 0 points. Every time a robot hit another robot, it earns the same points of the ealth removed from the hitted robot.
+- When a robot die, 100 health points are shared between living robots proportionally to the hit points, and hit points are then resetted
+- This point system favours robots good in defending, and good in attacking, and that can survive in a moderately crowded board.
+- Every 24 hours the last robot of an upper legue is moved to the lower legue, and it starts the legue tournament with the same point of the second classified robot. At the same time the best robot of the lower legue is upgraded to the upper legue, and it starts with the same points of the penultimate robot of the upper legue. So in case of 30 robots, a new entry that is clearly superior to all other robots take 3-4 days to reach the top.
+- The leader-board is given from the sum of all points of the games of last 14 days.
+- A robot with same owner and name can be improved without changing its name. Due to the 14 days window, it will not improve immediately its position in classify, but it will do it slowly. This is intentional, so robots can improve step by step, and other contender have time to react to various improvements, retaining for a while their position in the leader-board.
+- Every week a new leader-board is pubblished in a post and it is considered the official leader-board of the week. In any case the robots does not loose the points, and the 12 days window is mantained.
+- If a Robot can not play a game, it loose the game, and the game start with 3 robots, following the usual rules. If the game is 15 minutes long, it has 15 minutes for being active for the next-game.
 
- [collaboration] create a maling-list where game rules are discussed. Whenever it is found that some game rule is not fair or it can be exploited, then it can be changed/improved.
+registration: 
+- The robot send a registration message to the server, and the server respond within 2 seconds, the normal time-frame for the commands. Because it is the robot starting the connection, it is safe on the client side, and transparent for firewall rules, that usually allows outbound traffics.
+- The registration message contains a secret-key identifying the owner in a unique way. An owner can have more robot names, but only a key is issued. 
+- The secret key is stored from the server, if it is new, or checked with an already registered key if the owner is already registered.
+- If a new version of the robot is present, the owner must start a new instance of the robot signaling that is a new version, setting a flag in the first connection. At the end of the current game, the server will send a stop command to the old version, and it will use the new version.
 
- [robot-play] use the same REST-API on a secure HTTPS channel
-
- [robot-registration] 
-- the robot send a registration message to the server
-- because it is the robot starting the connection, it is safe on the client side, and transparent to firewall rules
-- the registration message contains a secret-key identifying the owner in a unique way
-- the secret key is stored from the server, if it is new, or checked with an already registered key if the owner is already registered
-- the registration message contains also the robot-name (its type), and its version
-- the key is only associated to the owner. A owner can create and register many robots.
-- the same client VM can contact the server many times contemporanely
-- a registration message is a signal from the client that it is ready for playing a game
-- the server starts a game only if there are new robots to test, or confidence intervals to improve, otherwise it refuse to start a game (for avoiding infinite repetitions of the same games)
-- every time a robot change its code, it should increase its version number, so new games are played
-- at the end of the game the client robot should terminate, and there should be also a simple BASH script re-launching the robot, so it is ready for another game, if the server think it is useful
-- on the same VM there can be multiple robots, and they are easy to launch and test
-- on the same VM there can be robots of different owners, if they trust each other, and they want share a common VM
-
- [collaboration] prepare a simple Dockerfile describing a robot VM, that can be shared between users trusting each other, and with some safe setting
- [collaboration] prepare a Dockerfile installing a netrobot-server
-
- [robot-registration], [cheap-resource-usage], and [safe-server] the server can optionally accept game connections only from robots knowing a pre-shared authorization key, so robot from a network of friends.
-
- [robot-registration] I can extend the current game-server and REST-API for accepting as parameter a game-identifier. A unique game-server can support many concurrent games. The number of parallel games that can be run, is specified on the command line. I’m using “tornado” library, that is more scalable and low-level than “flask”, and very good for these things.
-
- [robot-registration] the client robots tell to the game-server that they can play. The game-server starts only the games that it can manage. The pending registration requests can be unanswered and aborted by timeout. Then the client code (or a bash script on the client) can freely resend a registration request. So there is a queue of robots asking for a game, and robots that are playing. “tornado” API allows for an easy scheduling of request connections.
-
- [stats] stats can be prepared also as static HTML files with pre-answerd common queries. Also the played games are in the end simple static files.
-
- [stats] a robot can register itself also with a “beta” flag. “beta” robots are considered robots in testing mode. They are removed from the stats when the definitive version of the robot is registered, e.g. the robot with the same name, but without the beta flag.
- 
- [no-cheating] 
-- games are seen only in differite after they are played, and so complete board info can not be used
-- a cheat-check mode can force two opponents to play toghtether with other 2 server controlled weak robots, and see if the strong robot remain strongher also in a controlled environment
-- robots with a difference between normal and anti-cheat mode too big, are banned from the leaderboard or signaled in a special way
-
-[stats] Daily Games:
-- there is a certain fixed time of the day where all the robots must be online
-- for 2 hours the robots can play (orchestrated from the server) and the leader-board of the day is determined
-- all plays can be only seen in differite, after they are played
-- users can see leader-boards of past days
-- after the game-hours, the robots can remain active, but then only training plays are played and the official playboard is not touched
-- users can see the trainng/current stats but it is different from the official leader-board 
-- local servers can activate additional leader-boards time-frames
-
-[stats] An (addictive) Elm DashBoard:
+Elm DashBoard:
 - the leader-board is showed
-- the entries are owner/robot-name/version
+- the entries are owner/robot-name
 - on the right there are all the played games (too much) for determining the leader-board
 - the scope of the leader-board is:
   - show the leader-board with robot positions
   - selecting important games to view and study for improving and evaluating the robots
 - for each robot in the classify there is a check-box on the left for filtering only its games
-- filtering 2 robots, only the games between these 2 robots are shown (very intuitive)
+- filtering 2 robots, only the games between these 2 robots are shown (very intuitive), and from more recent to older (reflecting different versions of robots)
 - there is a maximum of 4 active filters, because the fights are between 4 robots
 - a graph with the stats of win/loose of every robot is shown, according the filter
 - the checkbox can filter on all/won/lost games for each robot, so the user can easily see when he lost/win against certain robots, and review important games 
 - additionally an user can see anti-cheat games between two robots. These games are not used for calculating the leader-board, because 2 robots are server controlled, but they spot the differences between robots, and it is an anti-cheat tool.
 - the user can select different days for inspecting the archive
 - a game can be viewed at different replay speeds
-- every game has a link
+- every game has an explicit URL link
 - the dashboard is a single page application
-- there is an archive HTML pure (and SEO friendly) version of the dashboard that is published daily as blog post
+- there is an archive HTML pure (and SEO friendly) version of the dashboard that is published weekly as blog post
 - dashboard with:
   - current active robots in the training arena
   - stream of events (they can be archived, but the archive is not visible to new users, but Elm receive and display only new events)
 
-[cheap-resource-usage] The maximum network-latency is 1 second for each command. If all the robots send a command before this time, then the next turn advance automatically. So games can be simulated faster. Inform the user where is located the server, so they can install VM in EU.
+community:
+- REST-API can have a version number, so with time it can be improved and the rule of the game improved
+- server code is on git-hub, so it can be improved
+- skeleton code for writing an initial robot in Python/PHP/Haskell is on the same repo, and so it can be improved, and only advanced code can be kept secret from robot authors
+- create a maling-list where game rules are discussed. Whenever it is found that some game rule is not fair or it can be exploited, then it can be changed/improved.
+- prepare a simple Dockerfile describing a robot VM, that can be shared between users trusting each other, and with some safe setting
+- prepare a Dockerfile installing a netrobot-server
 
-[cheap-resources-usage] Docker has a standard shell for starting/stopping containers and machines on remote ISP like EC2, GCE, DigitalOcean. So a cron-job on local machine can start and stop these containers at the end of the official daily-game time-frame. So in case of 2 hours, and cheap instances, the cost of 1 month can be splitted in 1 year. 
+private-code: 
+- a robot running as a service, and using a REST-API can be written in any language, and its code can be kept secret
+- very old version of robot code can be donated to the community
 
-[cheap-resource-usage] enable correct caching http flag so games and pages are not sent any time and can be cached.
+no-cheating: 
+- HTTPS as connection method
+- every command sent from a robot, receive a unique random token as answer from the server, and the robot can issue the next command only if it send the correct token
+- games are seen only in differite after they are played, and so complete board info can not be used
+- discover when there are big performances differences in certain combinations of robots, and if there are possible cheatings
 
-[cheap-resource-usage] consider using CloudFare that has also free plans.
-
-[cheap-resource-usage] store in the DB, and send games in a compressed way.
-
-[security] passwords/keys are stored in secure hash mode, so only the owner knows the key returning the hash. The DB with all the data game can be backuped also on public repositories in a safe way.
-
-[security] prepare daily an incremental backup of the database with game stats and so on, from which it can be reconstructed a fully functional server, make sure it has no private info, and make it shareable and backup-able with others.
-
-** Community
-- register www.netrobots.net
-- www.netrobots.net/blog developed in Hugo or faster static site generator
-- the leader-board of the day is automatically published on blog
-- www.netrobots.net/help etc... with all the notes for creating the robots
-- mailing list for discussing about development and new rules. Use google service that is good enough, and better than a normal forum (email integration)
-- GitHub for issues and DEV.
-- Find and Use a Logo: GitHub, WebSite and so on
-- a wiki with optional info about every owner and its robot in the leader board (the leader board has a link to the wiki entry)
-- addictive robot dashBoard
-- IRC or other type of Chat 
-
-** Implementation
-- game-server: play game between robots. It is the same already existing code.
-- tournamente-server: accept registrations, generate stats, and start games between robots according the stats needs. New code must be created.
-- stats-server: serve stats about robot strenghts. New code must be created, but probably it is a static serving of stats produced from tournament-server
 
 ** Tasks
-
-*** TODO Upgrade to new version of Elm
-
+*** TODO Create a separate Gym server and viewer
+*** TODO Create the Leader-Board server
+**** TODO Save games and view them later
+**** TODO Set the latency of the leader-board server to 2 seconds
+ TODO the latency is determined from the server, in the API result
+ TODO if the server is started in DEV mode, then the delay is the same of the Gym: 0.25
+**** TODO Create code contacting clients and informing when a game is ready
+**** TODO Support registration of a new version of a client robot
+*** TODO Add secret key to owner and game play
+The token + secret key is reliable.
+Check to use a different seed for each generated robot/token.
+*** TODO Test PyPy
 *** TODO Specify a Docker Machine with limited resources
 For players can only connect to the public game server.
 Reduced CPU and RAM usage.
 
-*** TODO Add secret key to owner and game play
-The token + secret key is reliable.
-Check to use a different seed for each generated robot/token.
-
-*** TODO Test PyPy
-
-*** TODO Find a common way for developing and installing the server
-Requirements:
-- local development
-- local run
-- safe and protected (isolated) locally
-- public installation
-- safe and isolated in public installation
-
-MAYBE nix is good but not so widespread used
-MAYBE Docker is good but for local development? It is required a manual setting?
-
-*** TODO adapt server for maximum latency
-- maximum latency
-- if all requests are sent before the maximum latency advance the turn
-- TODO check in the code if the turn scheduler recognize correctly if the turn is advanced
+*** TODO Create the viewer for the past games
+*** TODO Community
+ - register www.netrobots.net
+ - www.netrobots.net/blog developed in Hugo or faster static site generator
+ - the leader-board of the day is automatically published on blog
+ - www.netrobots.net/help etc... with all the notes for creating the robots
+ - mailing list for discussing about development and new rules. Use google service that is good enough, and better than a normal forum (email integration)
+ - GitHub for issues and DEV.
+ - Find and Use a Logo: GitHub, WebSite and so on
+ - a wiki with optional info about every owner and its robot in the leader board (the leader board has a link to the wiki entry)
+ - addictive robot dashBoard
+ - IRC or other type of Chat 
 * Game Rules Improvements
 MAYBE hitting an enemy is 1/2 damage as health
 
@@ -285,6 +238,14 @@ MAYBE there are no hitting/premium points for the damage on the enemy robot (may
 MAYBE the API signal if a Robot hit the wall or another robot with a specific message
 
 TODO use 0 for north direction
+*** TODO Take ispiration from http://robocode.sourceforge.net/
+*** TODO Add the possibility to play a local game and add graphics debugging on the viewer
+The GRAPH debugging are graphics commands that can be added using a certain simple API in certain moment of the game and so one can compare the view of the robot with the real view.
+
+The commands cane be:
+- draw this here, with this fade off latency
+- etc...
+- extend the commands according the needs. They are coded from the interested and then improve the code sending patches.
 
 ** Robot Parameter Customizations
 
